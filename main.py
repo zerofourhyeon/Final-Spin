@@ -228,6 +228,13 @@ class Game:
         self.black_background = pygame.transform.scale(
             self.black_background, (WINDOW_WIDTH, WINDOW_HEIGHT)
         )
+        self.roulette = Roulette((900, 50))  # 룰렛 위치 설정, 필요에 따라 수정
+        self.item_slots = [
+            ItemSlot((900, 150), RED),  # 빨간색 슬롯
+            ItemSlot((950, 150), BLACK),  # 검은색 슬롯
+        ]
+        self.placed_item = None  # 현재 놓인 아이템
+        self.spin_roulette = False  # 룰렛 회전 여부
 
     def display_table(self, window):
         """게임 테이블 그리기"""
@@ -381,6 +388,93 @@ class Scarecrow:
             self.position = new_position
             self.rect.topleft = self.position
         self.active = random.choice([True, False])
+
+class Roulette:
+    def __init__(self, position):
+        self.position = position
+        self.wheel_colors = [RED, BLACK] * 5  # 룰렛 휠 색상 (빨강, 검정 번갈아 10개)
+        random.shuffle(self.wheel_colors)  # 휠 색상 섞기
+        self.wheel_radius = 50
+        self.arrow_size = 10
+        self.arrow_color = WHITE
+        self.angle = 0
+        self.spinning = False
+        self.spin_speed = 0
+
+    def draw(self, window):
+        """룰렛 그리기"""
+        # 휠 그리기
+        for i, color in enumerate(self.wheel_colors):
+            angle = math.radians(i * 36 + self.angle)  # 색상 각도 계산 (360도 / 10개 = 36도)
+            x = self.position[0] + self.wheel_radius * math.cos(angle)
+            y = self.position[1] + self.wheel_radius * math.sin(angle)
+            pygame.draw.circle(window, color, (int(x), int(y)), 15)  # 색상 원 그리기
+
+        # 화살표 그리기
+        arrow_point = (
+            self.position[0] + self.wheel_radius + self.arrow_size,
+            self.position[1],
+        )
+        pygame.draw.polygon(
+            window,
+            self.arrow_color,
+            [
+                arrow_point,
+                (arrow_point[0] - self.arrow_size, arrow_point[1] - self.arrow_size // 2),
+                (arrow_point[0] - self.arrow_size, arrow_point[1] + self.arrow_size // 2),
+            ],
+        )
+
+    def spin(self):
+        """룰렛 회전 시작"""
+        self.spinning = True
+        self.spin_speed = random.randint(5, 15)  # 회전 속도 무작위 설정
+
+    def update(self):
+        """룰렛 회전 업데이트"""
+        if self.spinning:
+            self.angle = (self.angle + self.spin_speed) % 360
+            self.spin_speed *= 0.95  # 회전 속도 점차 감소
+            if self.spin_speed < 0.1:
+                self.spinning = False
+                self.spin_speed = 0
+
+    def get_result(self):
+        """룰렛 회전 결과 (빨간색 또는 검은색) 반환"""
+        index = int((self.angle // 36) % 10)  # 화살표가 가리키는 색상 인덱스 계산
+        return self.wheel_colors[index]
+
+class ItemSlot:
+    def __init__(self, position, color):
+        self.position = position
+        self.color = color
+        self.rect = pygame.Rect(position[0], position[1], 50, 50)  # 슬롯 크기 설정
+        self.item = None
+
+    def draw(self, window):
+        """슬롯 그리기"""
+        pygame.draw.rect(window, self.color, self.rect, 2)  # 슬롯 테두리 그리기
+        if self.item:
+            # 슬롯에 아이템이 있으면 아이템 이미지 중앙에 그리기
+            item_image = pygame.transform.scale(self.item.image, (40, 40))
+            item_rect = item_image.get_rect(center=self.rect.center)
+            window.blit(item_image, item_rect)
+
+    def is_clicked(self, mouse_pos):
+        """슬롯 클릭 여부 확인"""
+        return self.rect.collidepoint(mouse_pos)
+
+    def place_item(self, item):
+        """슬롯에 아이템 배치"""
+        self.item = item
+
+    def remove_item(self):
+        """슬롯에서 아이템 제거"""
+        self.item = None
+
+    def get_item(self):
+        """슬롯에 있는 아이템 반환"""
+        return self.item
 
 # --- 함수 ---
 
@@ -591,6 +685,51 @@ def handle_reload(weapon, cigarette1, cigarette2, scarecrow1, scarecrow2, bullet
     for grenade in grenades:
         grenade.reactivate()
 
+def handle_item_placement(mouse_pos, item_slots, current_item, current_player):
+    """아이템 배치 처리"""
+    global placed_item
+    for slot in item_slots:
+        if slot.is_clicked(mouse_pos) and current_item:
+            if placed_item[current_player] is not None:
+                # 이미 놓인 아이템이 있으면 해당 아이템 비활성화
+                placed_item[current_player].active = True
+
+            slot.place_item(current_item)
+            current_item.active = False  # 아이템 비활성화
+            placed_item[current_player] = current_item  # 놓인 아이템 기록
+            return True
+    return False
+
+def handle_roulette_spin(item_slots, roulette, current_player):
+    """룰렛 회전 처리"""
+    if placed_item[current_player] is not None:
+        roulette.spin()
+        return True
+    return False
+
+def activate_item(item_slot, roulette, player_lives, current_player, bullet_enhanced, scarecrow_protected):
+    """룰렛 결과에 따른 아이템 발동 처리"""
+    global placed_item
+    if item_slot.item:
+        result_color = roulette.get_result()
+        if result_color == item_slot.color:
+            print(f"Activating item: {type(item_slot.item).__name__}")
+            if isinstance(item_slot.item, Cigarette):
+                item_slot.item.smoke(player_lives, current_player)
+            elif isinstance(item_slot.item, Bullet):
+                item_slot.item.enhance()
+                bullet_enhanced[current_player] = True
+            elif isinstance(item_slot.item, Scarecrow):
+                item_slot.item.apply_effect()
+                scarecrow_protected[1 - current_player] = True
+            elif isinstance(item_slot.item, Grenade):
+                item_slot.item.use(player_lives)
+        else:
+            print(f"Item {type(item_slot.item).__name__} removed.")
+
+        item_slot.remove_item()
+        placed_item[current_player] = None
+
 # --- 초기화 ---
 
 # Pygame 초기화
@@ -666,6 +805,7 @@ in_menu = True
 game_state = GameState.PLAYING
 bullet_enhanced = [False, False]
 scarecrow_protected = [False, False]
+placed_item = [None, None]  # 각 플레이어가 놓은 아이템
 
 # --- 메인 루프 ---
 
@@ -755,36 +895,40 @@ while run:
         for grenade in grenades:
             grenade.draw(window)
 
+        # 룰렛 및 아이템 슬롯 그리기
+        game.roulette.draw(window)
+        for slot in game.item_slots:
+            slot.draw(window)
+
+        # 룰렛 회전 애니메이션 업데이트
+        game.roulette.update()
+
+        # 현재 턴인 플레이어에 따라 사용 가능한 아이템 설정
+        available_items = []
+        if current_player == 0:
+            available_items = [cigarette1, scarecrow1] + [b for b in bullets if b.rect.x < WINDOW_WIDTH // 2] + [g for g in grenades if g.rect.x < WINDOW_WIDTH // 2]
+        else:
+            available_items = [cigarette2, scarecrow2] + [b for b in bullets if b.rect.x > WINDOW_WIDTH // 2] + [g for g in grenades if g.rect.x > WINDOW_WIDTH // 2]
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
-                # 각 아이템/버튼 클릭 처리 함수에서 클릭 여부를 반환하도록 수정
-                bullet_clicked = handle_bullet_click(
-                    mouse_pos, bullets, bullet_enhanced, current_player
-                )
 
-                scarecrow_clicked = handle_scarecrow_click(
-                    mouse_pos,
-                    scarecrow1,
-                    scarecrow2,
-                    current_player,
-                    scarecrow_protected,
-                )
+                # 아이템 클릭 확인 및 슬롯에 배치
+                for item in available_items:
+                    if item.active and item.rect.collidepoint(mouse_pos):
+                        current_item = item
+                        item_placed = handle_item_placement(
+                            mouse_pos, game.item_slots, current_item, current_player
+                        )
+                        break
 
                 if return_button_rect.collidepoint(mouse_pos):
                     in_menu = True
                     game.game_state = GameState.PLAYING
-                grenade_clicked = handle_grenade_click(
-                    mouse_pos, grenades, player_lives
-                )
 
-                if grenade_clicked:
-                    game_over, loser = check_game_over(player_lives)
-                    if game_over:
-                        game.game_state = GameState.GAME_OVER
-                        winner_index = 1 - loser
                 shoot_clicked, bullet_type = handle_shoot_buttons_click(
                     mouse_pos,
                     shoot_self_button_rect,
@@ -796,31 +940,38 @@ while run:
                     scarecrow_protected,
                 )
 
-                if shoot_clicked:  # 발사 버튼이 클릭된 경우
+                if shoot_clicked:
                     # 총알 발사 후 즉시 화면 업데이트
                     pygame.display.update()
                     game_over, loser = check_game_over(player_lives)
                     if game_over:
                         game.game_state = GameState.GAME_OVER
                         winner_index = 1 - loser
-                cigarette_clicked = False
-                if current_player == 0:
-                    cigarette_clicked = handle_cigarette_click(mouse_pos, cigarette1, player_lives, 0)
-                elif current_player == 1:
-                    cigarette_clicked = handle_cigarette_click(mouse_pos, cigarette2, player_lives, 1)
-
-                # 턴 변경 조건
-                if (
-                        bullet_clicked
-                        or scarecrow_clicked
-                        or grenade_clicked
-                        or shoot_clicked
-                        or cigarette_clicked
-                ) and not game_over and game.game_state == GameState.PLAYING:
-                    current_player = (current_player + 1) % 2
 
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r:
+                if event.key == pygame.K_SPACE:
+                    if not game.roulette.spinning:
+                        # 룰렛 회전 및 아이템 사용
+                        spin_clicked = handle_roulette_spin(
+                            game.item_slots, game.roulette, current_player
+                        )
+                        if spin_clicked:
+                            # 룰렛 회전 후 결과 확인 및 아이템 발동
+                            pygame.display.update()  # 룰렛 회전 애니메이션을 위해 업데이트
+                            pygame.time.delay(1000)  # 룰렛 회전 시간 지연
+                            game.roulette.update()
+                            for slot in game.item_slots:
+                                activate_item(
+                                    slot,
+                                    game.roulette,
+                                    player_lives,
+                                    current_player,
+                                    bullet_enhanced,
+                                    scarecrow_protected,
+                                )
+                            # 턴 변경
+                            current_player = (current_player + 1) % 2
+                elif event.key == pygame.K_r:
                     handle_reload(
                         weapon,
                         cigarette1,
