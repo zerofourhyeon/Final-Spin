@@ -27,13 +27,24 @@ IMAGE_DIR = "images"
 BACKGROUND_IMAGE_PATH = os.path.join(IMAGE_DIR, "background.png")
 BLUR_BACKGROUND_IMAGE_PATH = os.path.join(IMAGE_DIR, "blur_background.png")
 SHOTGUN_IMAGE_PATH = os.path.join(IMAGE_DIR, "shotgun.png")
-BLANK_IMAGE_PATH = os.path.join(IMAGE_DIR, "fake_bullet.png")  # 공포탄 이미지
-LIVE_IMAGE_PATH = os.path.join(IMAGE_DIR, "real_bullet.png")  # 실탄 이미지
+BLANK_IMAGE_PATH = os.path.join(IMAGE_DIR, "fake_bullet.png")
+LIVE_IMAGE_PATH = os.path.join(IMAGE_DIR, "real_bullet.png")
 TABLE_IMAGE_PATH = os.path.join(IMAGE_DIR, "table.png")
 GRENADE_IMAGE_PATH = os.path.join(IMAGE_DIR, "grenade.png")
 SCARECROW_IMAGE_PATH = os.path.join(IMAGE_DIR, "scarecrow.png")
 SYRINGE_IMAGE_PATH = os.path.join(IMAGE_DIR, "syringe.png")
 BULLET_ENHANCE_IMAGE_PATH = os.path.join(IMAGE_DIR, "bullet.png")
+
+# 사운드 경로
+SOUND_DIR = "sounds"
+REAL_BULLET_SOUND_PATH = os.path.join(SOUND_DIR, "real_bullet.wav")
+FAKE_BULLET_SOUND_PATH = os.path.join(SOUND_DIR, "fake_bullet.wav")
+BULLET_ENHANCED_SOUND_PATH = os.path.join(SOUND_DIR, "bullet.wav")
+BULLET_CARD_SOUND_PATH = os.path.join(SOUND_DIR, "bullet_card.wav")
+CARD_SOUND_PATH = os.path.join(SOUND_DIR, "card.wav")
+CARD_DELETE_SOUND_PATH = os.path.join(SOUND_DIR, "card_delete.wav")
+SYRINGE_SOUND_PATH = os.path.join(SOUND_DIR, "syringe.wav")
+GRENADE_SOUND_PATH = os.path.join(SOUND_DIR, "grenade.wav")
 
 # 게임 설정
 INITIAL_LIVES = 5
@@ -82,6 +93,19 @@ class Weapon:
         self.live = pygame.transform.scale(self.live, (40, 23))
         self.live = pygame.transform.rotate(self.live, -90)
 
+        # 사운드 로드
+        try:
+            self.real_bullet_sound = pygame.mixer.Sound(REAL_BULLET_SOUND_PATH)
+            self.fake_bullet_sound = pygame.mixer.Sound(FAKE_BULLET_SOUND_PATH)
+            self.bullet_enhanced_sound = pygame.mixer.Sound(
+                BULLET_ENHANCED_SOUND_PATH
+            )  # bullet.wav 사운드 추가
+        except pygame.error as e:
+            print(f"Failed to load bullet sound: {e}")
+            self.real_bullet_sound = None
+            self.fake_bullet_sound = None
+            self.bullet_enhanced_sound = None  # None으로 초기화
+
         self.player_lives = player_lives
         self.magazine = []
         self.blanks = []  # 공포탄 인덱스 저장
@@ -116,8 +140,8 @@ class Weapon:
             self.blanks = [i for i, x in enumerate(self.magazine) if x == 0]
             self.lives = [i for i, x in enumerate(self.magazine) if x == 1]
 
-    def shoot(self):
-        """총알 발사"""
+    def shoot(self, bullet_enhanced, current_player):  # 인수 2개를 받도록 수정
+        """총알 발사 및 사운드 재생"""
         if self.magazine:
             if len(self.blanks) > 0 and len(self.lives) > 0:  # 실탄과 공포탄이 모두 있는 경우
                 if random.choice([True, False]):  # 무작위로 실탄 또는 공포탄 선택
@@ -132,8 +156,25 @@ class Weapon:
             bullet_type = self.magazine.pop(index)
 
             # 실탄 및 공포탄 인덱스 업데이트
-            self.blanks = [i for i in self.blanks if i < index] + [i - 1 for i in self.blanks if i > index]
-            self.lives = [i for i in self.lives if i < index] + [i - 1 for i in self.lives if i > index]
+            self.blanks = [i for i in self.blanks if i < index] + [
+                i - 1 for i in self.blanks if i > index
+            ]
+            self.lives = [i for i in self.lives if i < index] + [
+                i - 1 for i in self.lives if i > index
+            ]
+
+            # 사운드 재생
+            if bullet_type == 1:
+                if bullet_enhanced[current_player]:
+                    # bullet 카드 효과가 적용된 실탄일 경우 bullet.wav 재생
+                    if self.bullet_enhanced_sound:
+                        self.bullet_enhanced_sound.play()
+                elif self.real_bullet_sound:
+                    # 일반 실탄일 경우 real_bullet.wav 재생
+                    self.real_bullet_sound.play()
+            elif bullet_type == 0 and self.fake_bullet_sound:
+                # 공포탄일 경우 fake_bullet.wav 재생
+                self.fake_bullet_sound.play()
 
             return bullet_type
         else:
@@ -143,12 +184,21 @@ class Weapon:
         """총알 표시 (박스 포함)"""
         bullet_width = 15  # 총알 너비 확대
         bullet_height = 30  # 총알 높이 확대
-        bullet_rect = pygame.Rect(pos_x, WINDOW_HEIGHT - bullet_height - 200, bullet_width, bullet_height)  # 위치 및 크기 조정
+        bullet_rect = pygame.Rect(
+            pos_x, WINDOW_HEIGHT - bullet_height - 200, bullet_width, bullet_height
+        )  # 위치 및 크기 조정
         pygame.draw.rect(window, color, bullet_rect, 0)
-        pygame.draw.rect(window, BLACK, (pos_x, WINDOW_HEIGHT - bullet_height - 200 - 8, bullet_width, 8), 0)
+        pygame.draw.rect(
+            window, BLACK, (pos_x, WINDOW_HEIGHT - bullet_height - 200 - 8, bullet_width, 8), 0
+        )
 
         # 박스 그리기 (총알 크기에 맞게 조정, 흰색으로 변경)
-        box_rect = pygame.Rect(pos_x - 6, WINDOW_HEIGHT - bullet_height - 200 - 18, bullet_width + 12, bullet_height + 26)  # 박스 크기 조정
+        box_rect = pygame.Rect(
+            pos_x - 6,
+            WINDOW_HEIGHT - bullet_height - 200 - 18,
+            bullet_width + 12,
+            bullet_height + 26,
+        )  # 박스 크기 조정
         pygame.draw.rect(window, WHITE, box_rect, 2)  # 테두리 색상 흰색으로 변경
 
     def display_shotgun(self, window):
@@ -159,7 +209,9 @@ class Weapon:
         """화면에 현재 탄창 상태를 중앙에 렌더링 (박스 포함)"""
         bullets_margin = 15  # 총알 간 추가 간격
         bullet_width = 15  # 총알 너비
-        total_bullets_width = len(self.magazine) * (bullet_width + bullets_margin) - bullets_margin
+        total_bullets_width = (
+            len(self.magazine) * (bullet_width + bullets_margin) - bullets_margin
+        )
         start_pos_x = (WINDOW_WIDTH - total_bullets_width) // 2
 
         for i, bullet_type in enumerate(self.magazine):
@@ -182,11 +234,20 @@ class Syringe:
         self.active = False  # 수정: 초기값을 False로 변경
         self.used_this_turn = False  # 턴당 사용 여부 추적 변수 추가
 
+        # 사운드 로드
+        try:
+            self.sound = pygame.mixer.Sound(SYRINGE_SOUND_PATH)  # syringe.wav 로드
+        except pygame.error as e:
+            print(f"Failed to load syringe sound: {e}")
+            self.sound = None
+
     def heal(self, player_lives, player_index):
         """플레이어의 생명력을 1 회복"""
         if player_lives[player_index] < INITIAL_LIVES:
             player_lives[player_index] += 1
             self.active = False
+            if self.sound:  # 사운드 재생
+                self.sound.play()
 
     def display_syringe(self, window):
         """지정된 위치에 주사기 표시"""
@@ -197,7 +258,7 @@ class Syringe:
 
     def reactivate(self):
         """50% 확률로 주사기를 재활성화"""
-        self.active = random.choice([True, False]) # 수정: 50%로 다시 변경
+        self.active = random.choice([True, False])  # 수정: 50%로 다시 변경
 
     def is_clicked(self, mouse_pos):
         """주사기가 클릭되었는지 확인"""
@@ -216,9 +277,18 @@ class Bullet:
         self.active = True
         self.used_this_turn = False  # 턴당 사용 여부 추적 변수 추가
 
+        # 사운드 로드
+        try:
+            self.sound = pygame.mixer.Sound(BULLET_CARD_SOUND_PATH)  # bullet_card.wav 로드
+        except pygame.error as e:
+            print(f"Failed to load bullet card sound: {e}")
+            self.sound = None
+
     def enhance(self):
         """총알 아이템을 사용하여 플레이어의 다음 공격을 강화하고 아이템 비활성화"""
         self.active = False
+        if self.sound:
+            self.sound.play()  # bullet_card.wav 재생
 
     def draw(self, window):
         """아이템 그리기"""
@@ -241,18 +311,26 @@ class Game:
         # 테이블 이미지 로드
         try:
             self.table = pygame.image.load(TABLE_IMAGE_PATH).convert_alpha()
-            self.table_image = pygame.transform.scale(self.table, (WINDOW_WIDTH, WINDOW_HEIGHT))
+            self.table_image = pygame.transform.scale(
+                self.table, (WINDOW_WIDTH, WINDOW_HEIGHT)
+            )
         except pygame.error as e:
             print(f"Failed to load table image: {e}")
             self.table = pygame.Surface((860, 320), pygame.SRCALPHA)  # 임의의 크기
 
         # 흐릿한 배경 이미지 로드
         try:
-            self.blur_background = pygame.image.load(BLUR_BACKGROUND_IMAGE_PATH).convert()
-            self.blur_background = pygame.transform.scale(self.blur_background, (WINDOW_WIDTH, WINDOW_HEIGHT))
+            self.blur_background = pygame.image.load(
+                BLUR_BACKGROUND_IMAGE_PATH
+            ).convert()
+            self.blur_background = pygame.transform.scale(
+                self.blur_background, (WINDOW_WIDTH, WINDOW_HEIGHT)
+            )
         except pygame.error as e:
             print(f"Failed to load blur background image: {e}")
-            self.blur_background = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+            self.blur_background = pygame.Surface(
+                (WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA
+            )
             self.blur_background.fill(BLACK)  # 실패 시 검은색으로 채움
 
     def display_table(self, window):
@@ -271,8 +349,15 @@ class Grenade:
             self.image.fill(RED)
         self.image = pygame.transform.scale(self.image, size)
         self.rect = self.image.get_rect(topleft=position)
-        self.active = False # 수정: 초기값을 False로 변경
+        self.active = False  # 수정: 초기값을 False로 변경
         self.used_this_turn = False  # 턴당 사용 여부 추적 변수 추가
+
+        # 사운드 로드
+        try:
+            self.sound = pygame.mixer.Sound(GRENADE_SOUND_PATH)  # grenade.wav 로드
+        except pygame.error as e:
+            print(f"Failed to load grenade sound: {e}")
+            self.sound = None
 
     def draw(self, window):
         """수류탄 그리기"""
@@ -291,6 +376,8 @@ class Grenade:
         for i in range(len(player_lives)):
             player_lives[i] = max(0, player_lives[i] - 1)
         print("Grenade used: All players' HP decreased by 1.")
+        if self.sound:  # 사운드 재생
+            self.sound.play()
 
     def reactivate(self):
         """수류탄 아이템 재활성화"""
@@ -301,10 +388,14 @@ class Card:
         # 테이블 이미지 로드
         try:
             self.table_image = pygame.image.load(TABLE_IMAGE_PATH).convert_alpha()
-            self.table_image = pygame.transform.scale(self.table_image, (WINDOW_WIDTH, WINDOW_HEIGHT))
+            self.table_image = pygame.transform.scale(
+                self.table_image, (WINDOW_WIDTH, WINDOW_HEIGHT)
+            )
         except pygame.error as e:
             print(f"Failed to load table image: {e}")
-            self.table_image = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+            self.table_image = pygame.Surface(
+                (WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA
+            )
 
     def draw_table(self, window):
         """게임 테이블 그리기"""
@@ -332,24 +423,24 @@ class Menu:
         if self.is_hovered(play_text_rect):
             window.blit(
                 menu_font.render("Play", True, RED),
-                (play_text_x, play_text_rect.y)  # 수정: x좌표를 play_text_x로 설정
+                (play_text_x, play_text_rect.y),  # 수정: x좌표를 play_text_x로 설정
             )
         else:
             window.blit(
                 menu_font.render("Play", True, WHITE),
-                (play_text_x, play_text_rect.y)  # 수정: x좌표를 play_text_x로 설정
+                (play_text_x, play_text_rect.y),  # 수정: x좌표를 play_text_x로 설정
             )
 
         # "Quit" 텍스트 렌더링 및 위치 조정
         if self.is_hovered(quit_text_rect):
             window.blit(
                 menu_font.render("Quit", True, RED),
-                (quit_text_x, quit_text_rect.y)  # 수정: x좌표를 quit_text_x로 설정
+                (quit_text_x, quit_text_rect.y),  # 수정: x좌표를 quit_text_x로 설정
             )
         else:
             window.blit(
                 menu_font.render("Quit", True, WHITE),
-                (quit_text_x, quit_text_rect.y)  # 수정: x좌표를 quit_text_x로 설정
+                (quit_text_x, quit_text_rect.y),  # 수정: x좌표를 quit_text_x로 설정
             )
 
 class Scarecrow:
@@ -435,10 +526,18 @@ def display_status_effects(window, bullet_enhanced, scarecrow_protected):
     player2_scarecrow_surface = font.render(player2_scarecrow_text, True, WHITE)
 
     # 텍스트 위치 설정
-    player1_bullet_rect = player1_bullet_surface.get_rect(bottomleft=(50, WINDOW_HEIGHT - 60))
-    player1_scarecrow_rect = player1_scarecrow_surface.get_rect(bottomleft=(50, WINDOW_HEIGHT - 35))
-    player2_bullet_rect = player2_bullet_surface.get_rect(bottomright=(WINDOW_WIDTH - 50, WINDOW_HEIGHT - 60))
-    player2_scarecrow_rect = player2_scarecrow_surface.get_rect(bottomright=(WINDOW_WIDTH - 50, WINDOW_HEIGHT - 35))
+    player1_bullet_rect = player1_bullet_surface.get_rect(
+        bottomleft=(50, WINDOW_HEIGHT - 60)
+    )
+    player1_scarecrow_rect = player1_scarecrow_surface.get_rect(
+        bottomleft=(50, WINDOW_HEIGHT - 35)
+    )
+    player2_bullet_rect = player2_bullet_surface.get_rect(
+        bottomright=(WINDOW_WIDTH - 50, WINDOW_HEIGHT - 60)
+    )
+    player2_scarecrow_rect = player2_scarecrow_surface.get_rect(
+        bottomright=(WINDOW_WIDTH - 50, WINDOW_HEIGHT - 35)
+    )
 
     # 텍스트 그리기
     window.blit(player1_bullet_surface, player1_bullet_rect)
@@ -456,7 +555,6 @@ def check_game_over(lives):
         return True, 0  # Player 1 승리
     else:
         return False, -1  # 게임 진행 중
-
 
 def draw_game_over(window, winner_index):
     """게임 종료 화면을 그리고 Quit 버튼을 표시합니다. 마우스 오버 시 Quit 텍스트 색상 변경"""
@@ -484,7 +582,9 @@ def draw_game_over(window, winner_index):
     quit_text = quit_font.render("Quit", True, WHITE)
 
     mouse_pos = pygame.mouse.get_pos()
-    quit_text_rect = quit_text.get_rect(center=(window.get_width() // 2, window.get_height() // 2 + 50))
+    quit_text_rect = quit_text.get_rect(
+        center=(window.get_width() // 2, window.get_height() // 2 + 50)
+    )
 
     # "Quit" 텍스트의 마우스 오버 효과
     if quit_text_rect.collidepoint(mouse_pos):
@@ -493,7 +593,10 @@ def draw_game_over(window, winner_index):
     # winner_text와 quit_text를 화면에 그림
     text_x = window.get_width() // 2
     text_y = window.get_height() // 2
-    window.blit(game_over_text, (text_x - game_over_text.get_width() // 2, text_y - game_over_text.get_height() // 2))
+    window.blit(
+        game_over_text,
+        (text_x - game_over_text.get_width() // 2, text_y - game_over_text.get_height() // 2),
+    )
     window.blit(quit_text, quit_text_rect)
 
 def draw_buttons(
@@ -507,7 +610,9 @@ def draw_buttons(
     """발사 버튼 그리기"""
     # 버튼 텍스트 중앙 정렬 및 크기 조정
     shoot_self_text_rect = shoot_self_text.get_rect(center=shoot_self_button_rect.center)
-    shoot_opponent_text_rect = shoot_opponent_text.get_rect(center=shoot_opponent_button_rect.center)
+    shoot_opponent_text_rect = shoot_opponent_text.get_rect(
+        center=shoot_opponent_button_rect.center
+    )
 
     pygame.draw.rect(
         window,
@@ -532,10 +637,11 @@ def draw_buttons(
     )
 
 def handle_bullet_click(mouse_pos, bullets, bullet_enhanced, current_player):
-    """총알 아이템 클릭 처리"""
+    """총알 아이템 클릭 처리 (card_delete.wav 재생)"""
     global item_used_this_turn
     for bullet in bullets:
         if bullet.is_clicked(mouse_pos) and not bullet.used_this_turn and not item_used_this_turn:
+            # 아이템 발동/삭제 여부 결정 (기존 코드와 동일)
             bullet.enhance()
             bullet_enhanced[current_player] = True
             bullet.used_this_turn = True
@@ -546,7 +652,7 @@ def handle_bullet_click(mouse_pos, bullets, bullet_enhanced, current_player):
 def handle_scarecrow_click(
     mouse_pos, scarecrow1, scarecrow2, current_player, scarecrow_protected
 ):
-    """허수아비 아이템 클릭 처리"""
+    """허수아비 아이템 클릭 처리 (card_delete.wav 재생)"""
     global item_used_this_turn
     if current_player == 0:
         if scarecrow1.active and scarecrow1.click(mouse_pos) and not scarecrow1.used_this_turn and not item_used_this_turn:
@@ -556,6 +662,8 @@ def handle_scarecrow_click(
             else:
                 print("Scarecrow effect did not activate!")  # 발동 실패 메시지
                 scarecrow1.active = False  # 수정: 발동 실패 시 카드 비활성화
+                if card_delete_sound:
+                    card_delete_sound.play()
             scarecrow1.used_this_turn = True
             item_used_this_turn = True
             return True
@@ -567,14 +675,15 @@ def handle_scarecrow_click(
             else:
                 print("Scarecrow effect did not activate!")  # 발동 실패 메시지
                 scarecrow2.active = False  # 수정: 발동 실패 시 카드 비활성화
+                if card_delete_sound:
+                    card_delete_sound.play()
             scarecrow2.used_this_turn = True
             item_used_this_turn = True
             return True
     return False
 
-
 def handle_grenade_click(mouse_pos, grenades, player_lives):
-    """수류탄 아이템 클릭 처리"""
+    """수류탄 아이템 클릭 처리 (card_delete.wav 재생)"""
     global item_used_this_turn
     global current_player
     global game_state
@@ -587,6 +696,8 @@ def handle_grenade_click(mouse_pos, grenades, player_lives):
                 print("Grenade effect activated!")
             else:
                 grenade.active = False  # 발동 실패 시 카드 비활성화
+                if card_delete_sound:
+                    card_delete_sound.play() # card_delete_sound 재생성
                 print("Grenade effect did not activate!")
 
             grenade.used_this_turn = True
@@ -613,7 +724,7 @@ def handle_grenade_click(mouse_pos, grenades, player_lives):
     return False
 
 def handle_syringe_click(mouse_pos, syringe, player_lives, player_index):
-    """주사기 클릭 처리"""
+    """주사기 클릭 처리 (card_delete.wav 재생)"""
     global item_used_this_turn
     if syringe.active and syringe.rect.collidepoint(mouse_pos) and not syringe.used_this_turn and not item_used_this_turn:
         if random.random() < 0.7:  # 70% 확률로 발동
@@ -622,6 +733,8 @@ def handle_syringe_click(mouse_pos, syringe, player_lives, player_index):
         else:
             print("Syringe effect did not activate!")
             syringe.active = False  # 발동 실패 시 카드 비활성화
+            if card_delete_sound:
+                card_delete_sound.play()  # card_delete.wav 재생성
         syringe.used_this_turn = True
         item_used_this_turn = True
         return True
@@ -636,7 +749,7 @@ def handle_shoot_action(
 ):
     """발사 액션 처리 및 총알 타입 반환"""
     global item_used_this_turn
-    bullet_type = weapon.shoot()
+    bullet_type = weapon.shoot(bullet_enhanced, current_player)
 
     if bullet_type is not None:
         damage = calculate_damage(bullet_enhanced, current_player)
@@ -704,7 +817,7 @@ def apply_damage(target_player, damage, scarecrow_protected, player_lives):
         scarecrow_protected[target_player] = False # 수정: 피해를 한 번 무효화한 후에는 Scarecrow 효과가 사라지도록 설정
 
 def handle_reload(weapon, syringe1, syringe2, scarecrow1, scarecrow2, bullets, grenades):
-    """재장전 및 아이템 재활성화 처리"""
+    """재장전 및 아이템 재활성화 처리 (card.wav 재생)"""
     global item_used_this_turn
     if not weapon.magazine:
         weapon.reload()
@@ -730,10 +843,17 @@ def handle_reload(weapon, syringe1, syringe2, scarecrow1, scarecrow2, bullets, g
         scarecrow2.used_this_turn = False
         item_used_this_turn = False
 
+        # 재장전 사운드 재생
+        if card_sound:
+            card_sound.play()
+
 # --- 초기화 ---
 
 # Pygame 초기화
 pygame.init()
+
+# 사운드 시스템 초기화
+pygame.mixer.init()
 
 # 창 생성
 window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -760,6 +880,19 @@ menu = Menu()
 player_lives = [INITIAL_LIVES, INITIAL_LIVES]
 weapon = Weapon(player_lives)
 card = Card()
+
+# 사운드 로드
+try:
+    card_sound = pygame.mixer.Sound(CARD_SOUND_PATH)
+    card_delete_sound = pygame.mixer.Sound(CARD_DELETE_SOUND_PATH)
+    syringe_sound = pygame.mixer.Sound(SYRINGE_SOUND_PATH)  # syringe.wav 로드
+    grenade_sound = pygame.mixer.Sound(GRENADE_SOUND_PATH)  # grenade.wav 로드
+except pygame.error as e:
+    print(f"Failed to load card sound: {e}")
+    card_sound = None
+    card_delete_sound = None
+    syringe_sound = None  # None으로 초기화
+    grenade_sound = None  # None으로 초기화
 
 # 아이템 카드 크기
 ITEM_WIDTH = 165
