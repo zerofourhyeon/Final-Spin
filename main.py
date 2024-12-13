@@ -45,6 +45,10 @@ CARD_SOUND_PATH = os.path.join(SOUND_DIR, "card.wav")
 CARD_DELETE_SOUND_PATH = os.path.join(SOUND_DIR, "card_delete.wav")
 SYRINGE_SOUND_PATH = os.path.join(SOUND_DIR, "syringe.wav")
 GRENADE_SOUND_PATH = os.path.join(SOUND_DIR, "grenade.wav")
+SCARECROW_CARD_SOUND_PATH = os.path.join(SOUND_DIR, "scarecrow_card.wav")
+SCARECROW_SOUND_PATH = os.path.join(SOUND_DIR, "scarecrow.wav")
+GAME_OVER_SOUND_PATH = os.path.join(SOUND_DIR, "game_over.wav")
+DRAW_SOUND_PATH = os.path.join(SOUND_DIR, "draw.wav")
 
 # 게임 설정
 INITIAL_LIVES = 5
@@ -140,7 +144,7 @@ class Weapon:
             self.blanks = [i for i, x in enumerate(self.magazine) if x == 0]
             self.lives = [i for i, x in enumerate(self.magazine) if x == 1]
 
-    def shoot(self, bullet_enhanced, current_player):  # 인수 2개를 받도록 수정
+    def shoot(self, bullet_enhanced, current_player, scarecrow_protected, target_player):
         """총알 발사 및 사운드 재생"""
         if self.magazine:
             if len(self.blanks) > 0 and len(self.lives) > 0:  # 실탄과 공포탄이 모두 있는 경우
@@ -165,13 +169,14 @@ class Weapon:
 
             # 사운드 재생
             if bullet_type == 1:
-                if bullet_enhanced[current_player]:
-                    # bullet 카드 효과가 적용된 실탄일 경우 bullet.wav 재생
-                    if self.bullet_enhanced_sound:
-                        self.bullet_enhanced_sound.play()
-                elif self.real_bullet_sound:
-                    # 일반 실탄일 경우 real_bullet.wav 재생
-                    self.real_bullet_sound.play()
+                if not scarecrow_protected[target_player]:  # scarecrow가 비활성화 된 경우에만 실탄 사운드 재생
+                    if bullet_enhanced[current_player]:
+                        # bullet 카드 효과가 적용된 실탄일 경우 bullet.wav 재생
+                        if self.bullet_enhanced_sound:
+                            self.bullet_enhanced_sound.play()
+                    elif self.real_bullet_sound:
+                        # 일반 실탄일 경우 real_bullet.wav 재생
+                        self.real_bullet_sound.play()
             elif bullet_type == 0 and self.fake_bullet_sound:
                 # 공포탄일 경우 fake_bullet.wav 재생
                 self.fake_bullet_sound.play()
@@ -458,6 +463,15 @@ class Scarecrow:
         self.active = False
         self.used_this_turn = False  # 턴당 사용 여부 추적 변수 추가
 
+        # 사운드 로드
+        try:
+            self.sound = pygame.mixer.Sound(SCARECROW_CARD_SOUND_PATH)  # scarecrow_card.wav 로드
+            self.scarecrow_sound = pygame.mixer.Sound(SCARECROW_SOUND_PATH)  # scarecrow.wav 로드
+        except pygame.error as e:
+            print(f"Failed to load scarecrow sound: {e}")
+            self.sound = None
+            self.scarecrow_sound = None
+
     def draw(self, screen):
         """화면에 아이템 그리기"""
         if self.active:
@@ -468,8 +482,10 @@ class Scarecrow:
         return self.active and self.rect.collidepoint(mouse_pos)
 
     def apply_effect(self):
-        """허수아비 아이템 효과 적용"""
+        """허수아비 아이템 효과 적용 및 scarecrow_card.wav 재생"""
         self.active = False
+        if self.sound:
+            self.sound.play()  # scarecrow_card.wav 재생
         print("Scarecrow activated!")
 
     def reactivate(self, new_position=None):
@@ -546,12 +562,23 @@ def display_status_effects(window, bullet_enhanced, scarecrow_protected):
     window.blit(player2_scarecrow_surface, player2_scarecrow_rect)
 
 def check_game_over(lives):
-    """게임 종료 조건 확인"""
+    """게임 종료 조건 확인, game_over.wav 또는 draw.wav 재생"""
+    global game_state
+
     if lives[0] <= 0 and lives[1] <= 0:
+        game_state = GameState.GAME_OVER
+        if draw_sound:  # 무승부일 때 draw.wav 재생
+            draw_sound.play()
         return True, -1  # 무승부
     elif lives[0] <= 0:
+        game_state = GameState.GAME_OVER
+        if game_over_sound:  # 다른 경우에는 game_over.wav 재생
+            game_over_sound.play()
         return True, 1  # Player 2 승리
     elif lives[1] <= 0:
+        game_state = GameState.GAME_OVER
+        if game_over_sound:  # 다른 경우에는 game_over.wav 재생
+            game_over_sound.play()
         return True, 0  # Player 1 승리
     else:
         return False, -1  # 게임 진행 중
@@ -652,12 +679,12 @@ def handle_bullet_click(mouse_pos, bullets, bullet_enhanced, current_player):
 def handle_scarecrow_click(
     mouse_pos, scarecrow1, scarecrow2, current_player, scarecrow_protected
 ):
-    """허수아비 아이템 클릭 처리 (card_delete.wav 재생)"""
+    """허수아비 아이템 클릭 처리 (card_delete.wav, scarecrow_card.wav 재생)"""
     global item_used_this_turn
     if current_player == 0:
         if scarecrow1.active and scarecrow1.click(mouse_pos) and not scarecrow1.used_this_turn and not item_used_this_turn:
             if random.random() < 0.3:  # 30% 확률로 발동
-                scarecrow1.apply_effect()
+                scarecrow1.apply_effect()  # scarecrow_card.wav 재생
                 scarecrow_protected[0] = True
             else:
                 print("Scarecrow effect did not activate!")  # 발동 실패 메시지
@@ -670,7 +697,7 @@ def handle_scarecrow_click(
     elif current_player == 1:
         if scarecrow2.active and scarecrow2.click(mouse_pos) and not scarecrow2.used_this_turn and not item_used_this_turn:
             if random.random() < 0.3:  # 30% 확률로 발동
-                scarecrow2.apply_effect()
+                scarecrow2.apply_effect()  # scarecrow_card.wav 재생
                 scarecrow_protected[1] = True
             else:
                 print("Scarecrow effect did not activate!")  # 발동 실패 메시지
@@ -739,27 +766,29 @@ def handle_syringe_click(mouse_pos, syringe, player_lives, player_index):
         item_used_this_turn = True
         return True
 
+
 def handle_shoot_action(
-    weapon,
-    current_player,
-    player_lives,
-    bullet_enhanced,
-    scarecrow_protected,
-    target_self,
+        weapon,
+        current_player,
+        player_lives,
+        bullet_enhanced,
+        scarecrow_protected,
+        target_self,
 ):
     """발사 액션 처리 및 총알 타입 반환"""
     global item_used_this_turn
-    bullet_type = weapon.shoot(bullet_enhanced, current_player)
+    target_player = current_player if target_self else (current_player + 1) % 2
+    bullet_type = weapon.shoot(bullet_enhanced, current_player, scarecrow_protected, target_player)
 
     if bullet_type is not None:
         damage = calculate_damage(bullet_enhanced, current_player)
-        target_player = current_player if target_self else (current_player + 1) % 2
+
         if bullet_type == 1:
             apply_damage(target_player, damage, scarecrow_protected, player_lives)
 
         # 총알 발사 후 턴 변경 (수정)
         if not (
-            bullet_type == 0 and target_self
+                bullet_type == 0 and target_self
         ):  # "Shoot Self"를 클릭했고, 데미지를 입지 않은 경우 (공포탄) 가 아닐 때만 턴을 넘김
             current_player = (current_player + 1) % 2
         # 턴 변경 시에, item_used_this_turn을 False로 설정
@@ -808,13 +837,23 @@ def calculate_damage(bullet_enhanced, current_player):
         bullet_enhanced[current_player] = False
     return damage
 
+
 def apply_damage(target_player, damage, scarecrow_protected, player_lives):
-    """피해 적용 (허수아비 보호 상태 고려)"""
+    """피해 적용 (허수아비 보호 상태 고려, scarecrow_sound 재생)"""
+    global scarecrow1, scarecrow2
+
+    if current_player == 0:
+        scarecrow = scarecrow2
+    else:
+        scarecrow = scarecrow1
+
     if not scarecrow_protected[target_player]:
         player_lives[target_player] = max(0, player_lives[target_player] - damage)
     else:
+        if scarecrow.scarecrow_sound:
+            scarecrow.scarecrow_sound.play()  # scarecrow_sound 재생 위치 변경
         print(f"Player {target_player + 1} is protected by Scarecrow!")
-        scarecrow_protected[target_player] = False # 수정: 피해를 한 번 무효화한 후에는 Scarecrow 효과가 사라지도록 설정
+        scarecrow_protected[target_player] = False
 
 def handle_reload(weapon, syringe1, syringe2, scarecrow1, scarecrow2, bullets, grenades):
     """재장전 및 아이템 재활성화 처리 (card.wav 재생)"""
@@ -885,14 +924,22 @@ card = Card()
 try:
     card_sound = pygame.mixer.Sound(CARD_SOUND_PATH)
     card_delete_sound = pygame.mixer.Sound(CARD_DELETE_SOUND_PATH)
-    syringe_sound = pygame.mixer.Sound(SYRINGE_SOUND_PATH)  # syringe.wav 로드
-    grenade_sound = pygame.mixer.Sound(GRENADE_SOUND_PATH)  # grenade.wav 로드
+    syringe_sound = pygame.mixer.Sound(SYRINGE_SOUND_PATH)
+    grenade_sound = pygame.mixer.Sound(GRENADE_SOUND_PATH)
+    scarecrow_card_sound = pygame.mixer.Sound(SCARECROW_CARD_SOUND_PATH)
+    scarecrow_sound = pygame.mixer.Sound(SCARECROW_SOUND_PATH)
+    game_over_sound = pygame.mixer.Sound(GAME_OVER_SOUND_PATH)
+    draw_sound = pygame.mixer.Sound(DRAW_SOUND_PATH)
 except pygame.error as e:
     print(f"Failed to load card sound: {e}")
     card_sound = None
     card_delete_sound = None
-    syringe_sound = None  # None으로 초기화
-    grenade_sound = None  # None으로 초기화
+    syringe_sound = None
+    grenade_sound = None
+    scarecrow_card_sound = None
+    scarecrow_sound = None
+    game_over_sound = None
+    draw_sound = None
 
 # 아이템 카드 크기
 ITEM_WIDTH = 165
@@ -1127,9 +1174,9 @@ while run:
                         )
 
         # 게임 종료 여부 확인 (이벤트 루프 밖으로 이동, 위치 수정)
-        game_over, winner_index = check_game_over(player_lives)
-        if game_over:
-            game.game_state = GameState.GAME_OVER
+        game_over, winner_index = check_game_over(player_lives)  # 반환값을 game_over, winner_index에 저장
+        if game_over:  # game_over가 True이면
+            game.game_state = GameState.GAME_OVER  # game.game_state를 GAME_OVER로 설정
 
         pygame.display.update()  # 이부분을 앞으로 이동
 
