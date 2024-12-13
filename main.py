@@ -12,37 +12,41 @@ RED = (255, 0, 0)
 BLACK = (0, 0, 0)
 
 # 창 크기 및 제목
-WINDOW_WIDTH = 1080
+WINDOW_WIDTH = 1260
 WINDOW_HEIGHT = 720
 WINDOW_TITLE = "Buckshot Roulette"
 
 # 폰트
-FONT_NAME = "Times New Roman"
-FONT_SIZE = 20
+FONT_NAME = None  # 시스템 기본 폰트 사용
+FONT_SIZE = 25
+MENU_FONT_SIZE = 60  # 메뉴 폰트 크기
+BOLD_FONT = True  # 굵은 폰트 사용 여부
 
 # 이미지 경로
 IMAGE_DIR = "images"
 BACKGROUND_IMAGE_PATH = os.path.join(IMAGE_DIR, "background.png")
-BACKGROUND_BLUR_IMAGE_PATH = os.path.join(IMAGE_DIR, "background_flou.png")
+BLUR_BACKGROUND_IMAGE_PATH = os.path.join(IMAGE_DIR, "blur_background.png")
 SHOTGUN_IMAGE_PATH = os.path.join(IMAGE_DIR, "shotgun.png")
-BLANK_IMAGE_PATH = os.path.join(IMAGE_DIR, "blanche.png")
-LIVE_IMAGE_PATH = os.path.join(IMAGE_DIR, "rouge.png")
+BLANK_IMAGE_PATH = os.path.join(IMAGE_DIR, "fake_bullet.png")  # 공포탄 이미지
+LIVE_IMAGE_PATH = os.path.join(IMAGE_DIR, "real_bullet.png")  # 실탄 이미지
 TABLE_IMAGE_PATH = os.path.join(IMAGE_DIR, "table.png")
-BLACK_BACKGROUND_IMAGE_PATH = os.path.join(IMAGE_DIR, "fond_noir.png")
-RETURN_IMAGE_PATH = os.path.join(IMAGE_DIR, "retour.png")
-RULES_IMAGE_PATH = os.path.join(IMAGE_DIR, "regles.png")
-CIGARETTE_IMAGE_PATH = os.path.join(IMAGE_DIR, "cigarette.png")
 GRENADE_IMAGE_PATH = os.path.join(IMAGE_DIR, "grenade.png")
+SCARECROW_IMAGE_PATH = os.path.join(IMAGE_DIR, "scarecrow.png")
+SYRINGE_IMAGE_PATH = os.path.join(IMAGE_DIR, "syringe.png")
+BULLET_ENHANCE_IMAGE_PATH = os.path.join(IMAGE_DIR, "bullet.png")
 
 # 게임 설정
 INITIAL_LIVES = 5
 NB_SLOTS = 8
 
+# 아이템 카드 크기
+ITEM_WIDTH = 165
+ITEM_HEIGHT = 214
+
 # --- 열거형 정의 ---
 
 class MenuState(Enum):
     MAIN = 0
-    RULES = 1
 
 class GameState(Enum):
     PLAYING = 0
@@ -52,31 +56,31 @@ class GameState(Enum):
 
 class Weapon:
     def __init__(self, player_lives):
-        # 샷건 이미지 로드
+        # 샷건 이미지 로드 및 크기 조정
         try:
             self.shotgun = pygame.image.load(SHOTGUN_IMAGE_PATH).convert_alpha()
         except pygame.error as e:
             print(f"Failed to load shotgun image: {e}")
-            self.shotgun = pygame.Surface((170, 50), pygame.SRCALPHA)
-        self.shotgun = pygame.transform.scale(self.shotgun, (170, 50))
+            self.shotgun = pygame.Surface((340, 100), pygame.SRCALPHA)  # 크기 확대
+        self.shotgun = pygame.transform.scale(self.shotgun, (340, 100))  # 크기 확대
 
         # 공포탄 이미지 로드
         try:
             self.blank = pygame.image.load(BLANK_IMAGE_PATH).convert_alpha()
         except pygame.error as e:
             print(f"Failed to load blank bullet image: {e}")
-            self.blank = pygame.Surface((69, 45), pygame.SRCALPHA)
-        self.blank = pygame.transform.scale(self.blank, (69, 45))
-        self.blank = pygame.transform.rotate(self.blank, 90)
+            self.blank = pygame.Surface((35, 18), pygame.SRCALPHA)
+        self.blank = pygame.transform.scale(self.blank, (40, 23))
+        self.blank = pygame.transform.rotate(self.blank, -90)
 
         # 실탄 이미지 로드
         try:
             self.live = pygame.image.load(LIVE_IMAGE_PATH).convert_alpha()
         except pygame.error as e:
             print(f"Failed to load live bullet image: {e}")
-            self.live = pygame.Surface((69, 45), pygame.SRCALPHA)
-        self.live = pygame.transform.scale(self.live, (69, 45))
-        self.live = pygame.transform.rotate(self.live, 90)
+            self.live = pygame.Surface((35, 18), pygame.SRCALPHA)
+        self.live = pygame.transform.scale(self.live, (40, 23))
+        self.live = pygame.transform.rotate(self.live, -90)
 
         self.player_lives = player_lives
         self.magazine = []
@@ -136,60 +140,81 @@ class Weapon:
             return None
 
     def display_bullet(self, window, pos_x, color):
-        """총알 표시"""
-        pygame.draw.rect(window, color, ((pos_x, 574), (8, 25)), 0)
-        pygame.draw.rect(window, BLACK, ((pos_x, 574 - 8), (8, 8)), 0)
+        """총알 표시 (박스 포함)"""
+        bullet_width = 15  # 총알 너비 확대
+        bullet_height = 30  # 총알 높이 확대
+        bullet_rect = pygame.Rect(pos_x, WINDOW_HEIGHT - bullet_height - 200, bullet_width, bullet_height)  # 위치 및 크기 조정
+        pygame.draw.rect(window, color, bullet_rect, 0)
+        pygame.draw.rect(window, BLACK, (pos_x, WINDOW_HEIGHT - bullet_height - 200 - 8, bullet_width, 8), 0)
+
+        # 박스 그리기 (총알 크기에 맞게 조정, 흰색으로 변경)
+        box_rect = pygame.Rect(pos_x - 6, WINDOW_HEIGHT - bullet_height - 200 - 18, bullet_width + 12, bullet_height + 26)  # 박스 크기 조정
+        pygame.draw.rect(window, WHITE, box_rect, 2)  # 테두리 색상 흰색으로 변경
 
     def display_shotgun(self, window):
         """샷건 이미지 표시"""
-        window.blit(self.shotgun, (455, 330))
+        window.blit(self.shotgun, (WINDOW_WIDTH // 2 - 170, WINDOW_HEIGHT // 2 - 50))
 
     def display_magazine(self, window):
-        """화면에 현재 탄창 상태 렌더링"""
-        pos_x = 492
-        for i in range(len(self.magazine)):
-            if self.magazine[i] == 0:
+        """화면에 현재 탄창 상태를 중앙에 렌더링 (박스 포함)"""
+        bullets_margin = 15  # 총알 간 추가 간격
+        bullet_width = 15  # 총알 너비
+        total_bullets_width = len(self.magazine) * (bullet_width + bullets_margin) - bullets_margin
+        start_pos_x = (WINDOW_WIDTH - total_bullets_width) // 2
+
+        for i, bullet_type in enumerate(self.magazine):
+            pos_x = start_pos_x + i * (bullet_width + bullets_margin)
+            if bullet_type == 0:
                 self.display_bullet(window, pos_x, WHITE)
             else:
                 self.display_bullet(window, pos_x, RED)
-            pos_x += 12
 
-class Cigarette:
+class Syringe:
     def __init__(self, position):
-        # 담배 이미지 로드
+        # 주사기 이미지 로드
         try:
-            self.image = pygame.image.load(CIGARETTE_IMAGE_PATH).convert_alpha()
+            self.image = pygame.image.load(SYRINGE_IMAGE_PATH).convert_alpha()
         except pygame.error as e:
-            print(f"Failed to load cigarette image: {e}")
-            self.image = pygame.Surface((50, 50), pygame.SRCALPHA)  # 임의의 크기로 설정, 필요에 따라 수정
+            print(f"Failed to load syringe image: {e}")
+            self.image = pygame.Surface((50, 50), pygame.SRCALPHA)
+        self.image = pygame.transform.scale(self.image, (ITEM_WIDTH, ITEM_HEIGHT))
         self.rect = self.image.get_rect(topleft=position)
-        self.active = False
+        self.active = False  # 수정: 초기값을 False로 변경
+        self.used_this_turn = False  # 턴당 사용 여부 추적 변수 추가
 
-    def smoke(self, player_lives, player_index):
-        """담배 피우기"""
-        player_lives[player_index] += 1
-        self.active = False
+    def heal(self, player_lives, player_index):
+        """플레이어의 생명력을 1 회복"""
+        if player_lives[player_index] < INITIAL_LIVES:
+            player_lives[player_index] += 1
+            self.active = False
 
-    def display_cigarette(self, window):
-        """지정된 위치에 담배 표시"""
+    def display_syringe(self, window):
+        """지정된 위치에 주사기 표시"""
+        if not self.active:
+            return
         if self.active:
             window.blit(self.image, self.rect.topleft)
 
     def reactivate(self):
-        """50% 확률로 담배를 재활성화"""
-        self.active = random.choice([True, False])
+        """50% 확률로 주사기를 재활성화"""
+        self.active = random.choice([True, False]) # 수정: 50%로 다시 변경
+
+    def is_clicked(self, mouse_pos):
+        """주사기가 클릭되었는지 확인"""
+        return self.active and self.rect.collidepoint(mouse_pos)
 
 class Bullet:
-    def __init__(self, position, size=(40, 40)):
+    def __init__(self, position, size=(50, 69)):  # 수정: 크기 조정
         # 총알 이미지 로드
         try:
-            self.image = pygame.image.load(LIVE_IMAGE_PATH).convert_alpha()
+            self.image = pygame.image.load(BULLET_ENHANCE_IMAGE_PATH).convert_alpha()
         except pygame.error as e:
             print(f"Failed to load bullet image: {e}")
             self.image = pygame.Surface(size, pygame.SRCALPHA)
-        self.image = pygame.transform.scale(self.image, size)
+        self.image = pygame.transform.scale(self.image, (ITEM_WIDTH, ITEM_HEIGHT))
         self.rect = self.image.get_rect(topleft=position)
         self.active = True
+        self.used_this_turn = False  # 턴당 사용 여부 추적 변수 추가
 
     def enhance(self):
         """총알 아이템을 사용하여 플레이어의 다음 공격을 강화하고 아이템 비활성화"""
@@ -197,6 +222,8 @@ class Bullet:
 
     def draw(self, window):
         """아이템 그리기"""
+        if not self.active:
+            return
         if self.active:
             window.blit(self.image, self.rect.topleft)
 
@@ -214,40 +241,27 @@ class Game:
         # 테이블 이미지 로드
         try:
             self.table = pygame.image.load(TABLE_IMAGE_PATH).convert_alpha()
+            self.table_image = pygame.transform.scale(self.table, (WINDOW_WIDTH, WINDOW_HEIGHT))
         except pygame.error as e:
             print(f"Failed to load table image: {e}")
             self.table = pygame.Surface((860, 320), pygame.SRCALPHA)  # 임의의 크기
-        # 검은 배경 이미지 로드
+
+        # 흐릿한 배경 이미지 로드
         try:
-            self.black_background = pygame.image.load(BLACK_BACKGROUND_IMAGE_PATH).convert_alpha()
+            self.blur_background = pygame.image.load(BLUR_BACKGROUND_IMAGE_PATH).convert()
+            self.blur_background = pygame.transform.scale(self.blur_background, (WINDOW_WIDTH, WINDOW_HEIGHT))
         except pygame.error as e:
-            print(f"Failed to load black background image: {e}")
-            self.black_background = pygame.Surface(
-                (WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA
-            )
-        self.black_background = pygame.transform.scale(
-            self.black_background, (WINDOW_WIDTH, WINDOW_HEIGHT)
-        )
-        self.roulette = Roulette((900, 50))  # 룰렛 위치 설정, 필요에 따라 수정
-        self.item_slots = [
-            ItemSlot((900, 150), RED),  # 빨간색 슬롯
-            ItemSlot((950, 150), BLACK),  # 검은색 슬롯
-        ]
-        self.placed_item = None  # 현재 놓인 아이템
-        self.spin_roulette = False  # 룰렛 회전 여부
+            print(f"Failed to load blur background image: {e}")
+            self.blur_background = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+            self.blur_background.fill(BLACK)  # 실패 시 검은색으로 채움
 
     def display_table(self, window):
         """게임 테이블 그리기"""
         if self.game_state == GameState.PLAYING:
-            window.blit(self.table, (-110, 50))
-
-    def display_black_background(self, window):
-        """검은색 배경 그리기"""
-        if self.game_state == GameState.PLAYING:
-            window.blit(self.black_background, (0, 0))
+            window.blit(self.table_image, (0, 0))
 
 class Grenade:
-    def __init__(self, position, size=(50, 50)):
+    def __init__(self, position, size=(ITEM_WIDTH, ITEM_HEIGHT)):
         # 수류탄 이미지 로드
         try:
             self.image = pygame.image.load(GRENADE_IMAGE_PATH).convert_alpha()
@@ -257,10 +271,13 @@ class Grenade:
             self.image.fill(RED)
         self.image = pygame.transform.scale(self.image, size)
         self.rect = self.image.get_rect(topleft=position)
-        self.active = True
+        self.active = False # 수정: 초기값을 False로 변경
+        self.used_this_turn = False  # 턴당 사용 여부 추적 변수 추가
 
     def draw(self, window):
         """수류탄 그리기"""
+        if not self.active:
+            return
         if self.active:
             window.blit(self.image, self.rect.topleft)
 
@@ -281,92 +298,74 @@ class Grenade:
 
 class Card:
     def __init__(self):
-        self.slot_coords = [
-            (30, 165),
-            (150, 165),
-            (30, 393),
-            (150, 393),  # 왼쪽 슬롯
-            (810, 165),
-            (930, 165),
-            (810, 393),
-            (930, 393),  # 오른쪽 슬롯
-        ]
+        # 테이블 이미지 로드
+        try:
+            self.table_image = pygame.image.load(TABLE_IMAGE_PATH).convert_alpha()
+            self.table_image = pygame.transform.scale(self.table_image, (WINDOW_WIDTH, WINDOW_HEIGHT))
+        except pygame.error as e:
+            print(f"Failed to load table image: {e}")
+            self.table_image = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
 
     def draw_table(self, window):
         """게임 테이블 그리기"""
-        pygame.draw.rect(window, (111, 63, 77), ((0, 145), (WINDOW_WIDTH, 420)), 0)
-        pygame.draw.line(
-            window, WHITE, (WINDOW_WIDTH // 2, 145), (WINDOW_WIDTH // 2, 563), 3
-        )
-        pygame.draw.circle(window, WHITE, (WINDOW_WIDTH // 2, 355), 210, 3)
-        pygame.draw.rect(window, (192, 192, 192), ((487, 565), (106, 35)), 0)
-
-    def draw_card_slots(self, window, width, height):
-        """카드 슬롯 그리기"""
-        for coord in self.slot_coords:
-            pygame.draw.rect(
-                window, WHITE, (coord[0], coord[1], width, height), 1
-            )
+        window.blit(self.table_image, (0, 0))
 
 class Menu:
     def __init__(self):
         self.menu_state = MenuState.MAIN
-        # 흐린 배경 이미지 로드
-        try:
-            self.background_blur = pygame.image.load(
-                BACKGROUND_BLUR_IMAGE_PATH
-            ).convert_alpha()
-        except pygame.error as e:
-            print(f"Failed to load blurred background image: {e}")
-            self.background_blur = pygame.Surface(
-                (WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA
-            )
-        # 돌아가기 버튼 이미지 로드
-        try:
-            self.return_image = pygame.image.load(RETURN_IMAGE_PATH).convert_alpha()
-        except pygame.error as e:
-            print(f"Failed to load return button image: {e}")
-            self.return_image = pygame.Surface((100, 100), pygame.SRCALPHA)
-        self.return_image = pygame.transform.scale(self.return_image, (100, 100))
 
-        # 규칙 이미지 로드
-        try:
-            self.rules_image = pygame.image.load(RULES_IMAGE_PATH).convert_alpha()
-        except pygame.error as e:
-            print(f"Failed to load rules image: {e}")
-            self.rules_image = pygame.Surface((780, 560), pygame.SRCALPHA)  # 임의의 크기
-
-    def show_main_menu(self, window, play_text, rules_text, quit_text):
-        """메인 메뉴 표시"""
-        window.blit(play_text, (490, 475))
-        window.blit(rules_text, (490, 510))
-        window.blit(quit_text, (490, 545))
-
-    def show_rules(self, window):
-        """규칙 표시"""
-        if self.menu_state == MenuState.RULES:
-            window.blit(self.background_blur, (0, 0))
-            window.blit(self.rules_image, (150, 80))
-            window.blit(self.return_image, (0, 0))
-
-    def is_hovered(self, x, y, width, height):
+    def is_hovered(self, rect):
         """마우스가 버튼 위에 있는지 확인"""
         mouse_x, mouse_y = pygame.mouse.get_pos()
-        return x < mouse_x < x + width and y < mouse_y < y + height
+        return rect.collidepoint(mouse_x, mouse_y)
+
+    def show_main_menu(self, window, play_text_rect, quit_text_rect):
+        """메인 메뉴 표시"""
+        # 메뉴 텍스트 그리기
+        # 텍스트를 그릴 때, 텍스트의 get_rect() 함수를 써서 그리는 대신, rect 인자를 직접 사용
+
+        # 텍스트 위치 계산 (수정)
+        play_text_x = WINDOW_WIDTH // 15 - play_text_rect.width // 4  # 중앙 정렬
+        quit_text_x = WINDOW_WIDTH // 15 - quit_text_rect.width // 4  # 중앙 정렬
+
+        # "Play" 텍스트 렌더링 및 위치 조정
+        if self.is_hovered(play_text_rect):
+            window.blit(
+                menu_font.render("Play", True, RED),
+                (play_text_x, play_text_rect.y)  # 수정: x좌표를 play_text_x로 설정
+            )
+        else:
+            window.blit(
+                menu_font.render("Play", True, WHITE),
+                (play_text_x, play_text_rect.y)  # 수정: x좌표를 play_text_x로 설정
+            )
+
+        # "Quit" 텍스트 렌더링 및 위치 조정
+        if self.is_hovered(quit_text_rect):
+            window.blit(
+                menu_font.render("Quit", True, RED),
+                (quit_text_x, quit_text_rect.y)  # 수정: x좌표를 quit_text_x로 설정
+            )
+        else:
+            window.blit(
+                menu_font.render("Quit", True, WHITE),
+                (quit_text_x, quit_text_rect.y)  # 수정: x좌표를 quit_text_x로 설정
+            )
 
 class Scarecrow:
-    def __init__(self, position, size=(80, 80)):
+    def __init__(self, position, size=(ITEM_WIDTH, ITEM_HEIGHT)):
         self.position = position
         self.size = size
-        # 허수아비 이미지 로드 (임시 이미지 사용)
+        # 허수아비 이미지 로드
         try:
-            self.image = pygame.image.load(BLANK_IMAGE_PATH).convert_alpha()  # 임시 이미지
+            self.image = pygame.image.load(SCARECROW_IMAGE_PATH).convert_alpha()
         except pygame.error as e:
             print(f"Failed to load Scarecrow image: {e}")
             self.image = pygame.Surface(self.size, pygame.SRCALPHA)
         self.image = pygame.transform.scale(self.image, self.size)
         self.rect = self.image.get_rect(topleft=self.position)
         self.active = False
+        self.used_this_turn = False  # 턴당 사용 여부 추적 변수 추가
 
     def draw(self, screen):
         """화면에 아이템 그리기"""
@@ -389,146 +388,107 @@ class Scarecrow:
             self.rect.topleft = self.position
         self.active = random.choice([True, False])
 
-class Roulette:
-    def __init__(self, position):
-        self.position = position
-        self.wheel_colors = [RED, BLACK] * 5  # 룰렛 휠 색상 (빨강, 검정 번갈아 10개)
-        random.shuffle(self.wheel_colors)  # 휠 색상 섞기
-        self.wheel_radius = 50
-        self.arrow_size = 10
-        self.arrow_color = WHITE
-        self.angle = 0
-        self.spinning = False
-        self.spin_speed = 0
-
-    def draw(self, window):
-        """룰렛 그리기"""
-        # 휠 그리기
-        for i, color in enumerate(self.wheel_colors):
-            angle = math.radians(i * 36 + self.angle)  # 색상 각도 계산 (360도 / 10개 = 36도)
-            x = self.position[0] + self.wheel_radius * math.cos(angle)
-            y = self.position[1] + self.wheel_radius * math.sin(angle)
-            pygame.draw.circle(window, color, (int(x), int(y)), 15)  # 색상 원 그리기
-
-        # 화살표 그리기
-        arrow_point = (
-            self.position[0] + self.wheel_radius + self.arrow_size,
-            self.position[1],
-        )
-        pygame.draw.polygon(
-            window,
-            self.arrow_color,
-            [
-                arrow_point,
-                (arrow_point[0] - self.arrow_size, arrow_point[1] - self.arrow_size // 2),
-                (arrow_point[0] - self.arrow_size, arrow_point[1] + self.arrow_size // 2),
-            ],
-        )
-
-    def spin(self):
-        """룰렛 회전 시작"""
-        self.spinning = True
-        self.spin_speed = random.randint(5, 15)  # 회전 속도 무작위 설정
-
-    def update(self):
-        """룰렛 회전 업데이트"""
-        if self.spinning:
-            self.angle = (self.angle + self.spin_speed) % 360
-            self.spin_speed *= 0.95  # 회전 속도 점차 감소
-            if self.spin_speed < 0.1:
-                self.spinning = False
-                self.spin_speed = 0
-
-    def get_result(self):
-        """룰렛 회전 결과 (빨간색 또는 검은색) 반환"""
-        index = int((self.angle // 36) % 10)  # 화살표가 가리키는 색상 인덱스 계산
-        return self.wheel_colors[index]
-
-class ItemSlot:
-    def __init__(self, position, color):
-        self.position = position
-        self.color = color
-        self.rect = pygame.Rect(position[0], position[1], 50, 50)  # 슬롯 크기 설정
-        self.item = None
-
-    def draw(self, window):
-        """슬롯 그리기"""
-        pygame.draw.rect(window, self.color, self.rect, 2)  # 슬롯 테두리 그리기
-        if self.item:
-            # 슬롯에 아이템이 있으면 아이템 이미지 중앙에 그리기
-            item_image = pygame.transform.scale(self.item.image, (40, 40))
-            item_rect = item_image.get_rect(center=self.rect.center)
-            window.blit(item_image, item_rect)
-
-    def is_clicked(self, mouse_pos):
-        """슬롯 클릭 여부 확인"""
-        return self.rect.collidepoint(mouse_pos)
-
-    def place_item(self, item):
-        """슬롯에 아이템 배치"""
-        self.item = item
-
-    def remove_item(self):
-        """슬롯에서 아이템 제거"""
-        self.item = None
-
-    def get_item(self):
-        """슬롯에 있는 아이템 반환"""
-        return self.item
-
 # --- 함수 ---
 
 def display_lives(window, lives):
     """두 플레이어의 생명력을 화면 중앙에 표시"""
-    life_font = pygame.font.SysFont(FONT_NAME, 24)
+    life_font = pygame.font.SysFont(FONT_NAME, 36)
     window_rect = window.get_rect()
-    text_y = 50
+    text_y = window_rect.centery - 215  # 수정: 텍스트 y 좌표 조정
 
     for i, life in enumerate(lives):
         text = f"Player {i+1} HP: {life}"
         text_surface = life_font.render(text, True, WHITE)
-        window.blit(
-            text_surface,
-            ((window_rect.width - text_surface.get_width()) // 2, text_y),
-        )
-        text_y += 30
+        text_rect = text_surface.get_rect(center=(window_rect.centerx, text_y))
+        window.blit(text_surface, text_rect)
+        text_y += 35
 
+# display_turn 함수 정의
 def display_turn(window, current_player):
     """현재 플레이어 턴 표시"""
-    turn_text = font.render("Your Turn", True, RED)
+    turn_font = pygame.font.SysFont(FONT_NAME, 36)  # 폰트 크기 확대
     if current_player == 0:
-        window.blit(turn_text, (20, 20))
+        turn_text = turn_font.render("Player 1 Turn", True, RED)
+        turn_text_rect = turn_text.get_rect(topleft=(50, 30))  # 왼쪽 위에 위치
     else:
-        window.blit(
-            turn_text, (window.get_width() - turn_text.get_width() - 20, 20)
-        )
+        turn_text = turn_font.render("Player 2 Turn", True, RED)
+        turn_text_rect = turn_text.get_rect(topright=(WINDOW_WIDTH - 50, 30))  # 오른쪽 위에 위치
+
+    window.blit(turn_text, turn_text_rect)
+
+def display_status_effects(window, bullet_enhanced, scarecrow_protected):
+    """각 플레이어의 Bullet 및 Scarecrow 효과 활성화 상태를 텍스트로 표시"""
+    font = pygame.font.SysFont(FONT_NAME, 25)
+
+    # Player 1 상태 텍스트
+    player1_bullet_text = "Bullet: " + ("ON" if bullet_enhanced[0] else "OFF")
+    player1_scarecrow_text = "Scarecrow: " + ("ON" if scarecrow_protected[0] else "OFF")
+
+    # Player 2 상태 텍스트
+    player2_bullet_text = "Bullet: " + ("ON" if bullet_enhanced[1] else "OFF")
+    player2_scarecrow_text = "Scarecrow: " + ("ON" if scarecrow_protected[1] else "OFF")
+
+    # 텍스트 Surface 생성
+    player1_bullet_surface = font.render(player1_bullet_text, True, WHITE)
+    player1_scarecrow_surface = font.render(player1_scarecrow_text, True, WHITE)
+    player2_bullet_surface = font.render(player2_bullet_text, True, WHITE)
+    player2_scarecrow_surface = font.render(player2_scarecrow_text, True, WHITE)
+
+    # 텍스트 위치 설정
+    player1_bullet_rect = player1_bullet_surface.get_rect(bottomleft=(50, WINDOW_HEIGHT - 60))
+    player1_scarecrow_rect = player1_scarecrow_surface.get_rect(bottomleft=(50, WINDOW_HEIGHT - 35))
+    player2_bullet_rect = player2_bullet_surface.get_rect(bottomright=(WINDOW_WIDTH - 50, WINDOW_HEIGHT - 60))
+    player2_scarecrow_rect = player2_scarecrow_surface.get_rect(bottomright=(WINDOW_WIDTH - 50, WINDOW_HEIGHT - 35))
+
+    # 텍스트 그리기
+    window.blit(player1_bullet_surface, player1_bullet_rect)
+    window.blit(player1_scarecrow_surface, player1_scarecrow_rect)
+    window.blit(player2_bullet_surface, player2_bullet_rect)
+    window.blit(player2_scarecrow_surface, player2_scarecrow_rect)
 
 def check_game_over(lives):
     """게임 종료 조건 확인"""
-    for i, life in enumerate(lives):
-        if life <= 0:
-            return True, i
-    return False, -1
+    if lives[0] <= 0 and lives[1] <= 0:
+        return True, -1  # 무승부
+    elif lives[0] <= 0:
+        return True, 1  # Player 2 승리
+    elif lives[1] <= 0:
+        return True, 0  # Player 1 승리
+    else:
+        return False, -1  # 게임 진행 중
 
-# 전역 변수로 quit_text 선언
-quit_text = None
 
 def draw_game_over(window, winner_index):
     """게임 종료 화면을 그리고 Quit 버튼을 표시합니다. 마우스 오버 시 Quit 텍스트 색상 변경"""
-    global quit_text  # 전역 변수 quit_text 사용
+    global quit_text
 
-    window.fill(BLACK)
-    game_over_font = pygame.font.SysFont(FONT_NAME, 36)
-    winner_text = f"Player {winner_index + 1} Wins!"
+    # 흐릿한 배경 이미지 렌더링
+    window.blit(game.blur_background, (0, 0))
+
+    game_over_font = pygame.font.SysFont(FONT_NAME, 72)
+
+    # 무승부 처리 (수정)
+    if winner_index == -1:
+        winner_text = "Draw!"
+    else:
+        winner_text = f"Player {winner_index + 1} Wins!"
+
     game_over_text = game_over_font.render(winner_text, True, WHITE)
+
+    # "Quit" 텍스트를 위한 폰트 설정
+    quit_font = pygame.font.Font(FONT_NAME, FONT_SIZE)
+    if BOLD_FONT:
+        quit_font.set_bold(True)
+
+    # "Quit" 텍스트 렌더링
+    quit_text = quit_font.render("Quit", True, WHITE)
 
     mouse_pos = pygame.mouse.get_pos()
     quit_text_rect = quit_text.get_rect(center=(window.get_width() // 2, window.get_height() // 2 + 50))
 
+    # "Quit" 텍스트의 마우스 오버 효과
     if quit_text_rect.collidepoint(mouse_pos):
-        quit_text = font.render("Quit", True, RED)
-    else:
-        quit_text = font.render("Quit", True, WHITE)
+        quit_text = quit_font.render("Quit", True, RED)
 
     # winner_text와 quit_text를 화면에 그림
     text_x = window.get_width() // 2
@@ -542,68 +502,129 @@ def draw_buttons(
     shoot_opponent_button_rect,
     shoot_self_text,
     shoot_opponent_text,
+    weapon
 ):
     """발사 버튼 그리기"""
+    # 버튼 텍스트 중앙 정렬 및 크기 조정
+    shoot_self_text_rect = shoot_self_text.get_rect(center=shoot_self_button_rect.center)
+    shoot_opponent_text_rect = shoot_opponent_text.get_rect(center=shoot_opponent_button_rect.center)
+
     pygame.draw.rect(
         window,
-        RED if menu.is_hovered(*shoot_self_button_rect) else WHITE,
+        RED if menu.is_hovered(shoot_self_button_rect) else WHITE,
         shoot_self_button_rect,
         2,
     )
     pygame.draw.rect(
         window,
-        RED if menu.is_hovered(*shoot_opponent_button_rect) else WHITE,
+        RED if menu.is_hovered(shoot_opponent_button_rect) else WHITE,
         shoot_opponent_button_rect,
         2,
     )
+
     window.blit(
         shoot_self_text,
-        (shoot_self_button_rect.x + 10, shoot_self_button_rect.y + 10),
+        shoot_self_text_rect,
     )
     window.blit(
         shoot_opponent_text,
-        (shoot_opponent_button_rect.x + 10, shoot_opponent_button_rect.y + 10),
+        shoot_opponent_text_rect,
     )
 
 def handle_bullet_click(mouse_pos, bullets, bullet_enhanced, current_player):
     """총알 아이템 클릭 처리"""
+    global item_used_this_turn
     for bullet in bullets:
-        if bullet.is_clicked(mouse_pos):
+        if bullet.is_clicked(mouse_pos) and not bullet.used_this_turn and not item_used_this_turn:
             bullet.enhance()
             bullet_enhanced[current_player] = True
-            return True  # 클릭 여부 반환
+            bullet.used_this_turn = True
+            item_used_this_turn = True
+            return True
     return False
 
 def handle_scarecrow_click(
     mouse_pos, scarecrow1, scarecrow2, current_player, scarecrow_protected
 ):
     """허수아비 아이템 클릭 처리"""
-    if scarecrow1.active and current_player == 0:
-        if scarecrow1.click(mouse_pos):
-            scarecrow1.apply_effect()
-            scarecrow_protected[1] = True
+    global item_used_this_turn
+    if current_player == 0:
+        if scarecrow1.active and scarecrow1.click(mouse_pos) and not scarecrow1.used_this_turn and not item_used_this_turn:
+            if random.random() < 0.3:  # 30% 확률로 발동
+                scarecrow1.apply_effect()
+                scarecrow_protected[0] = True
+            else:
+                print("Scarecrow effect did not activate!")  # 발동 실패 메시지
+                scarecrow1.active = False  # 수정: 발동 실패 시 카드 비활성화
+            scarecrow1.used_this_turn = True
+            item_used_this_turn = True
             return True
-    elif scarecrow2.active and current_player == 1:
-        if scarecrow2.click(mouse_pos):
-            scarecrow2.apply_effect()
-            scarecrow_protected[0] = True
+    elif current_player == 1:
+        if scarecrow2.active and scarecrow2.click(mouse_pos) and not scarecrow2.used_this_turn and not item_used_this_turn:
+            if random.random() < 0.3:  # 30% 확률로 발동
+                scarecrow2.apply_effect()
+                scarecrow_protected[1] = True
+            else:
+                print("Scarecrow effect did not activate!")  # 발동 실패 메시지
+                scarecrow2.active = False  # 수정: 발동 실패 시 카드 비활성화
+            scarecrow2.used_this_turn = True
+            item_used_this_turn = True
             return True
     return False
+
 
 def handle_grenade_click(mouse_pos, grenades, player_lives):
     """수류탄 아이템 클릭 처리"""
+    global item_used_this_turn
+    global current_player
+    global game_state
+    global winner_index
+
     for grenade in grenades:
-        if grenade.is_clicked(mouse_pos):
-            grenade.use(player_lives)
+        if grenade.is_clicked(mouse_pos) and not grenade.used_this_turn and not item_used_this_turn:
+            if random.random() < 0.5:  # 50% 확률로 발동
+                grenade.use(player_lives)
+                print("Grenade effect activated!")
+            else:
+                grenade.active = False  # 발동 실패 시 카드 비활성화
+                print("Grenade effect did not activate!")
+
+            grenade.used_this_turn = True
+            item_used_this_turn = True
+
+            # 즉시 턴 종료 후 게임 종료 여부 확인 (수정)
+            current_player = (current_player + 1) % 2
+            item_used_this_turn = False  # 수정: 턴 변경 후 item_used_this_turn 재설정
+
+            for bullet in bullets:
+                bullet.used_this_turn = False
+            for g in grenades:
+                g.used_this_turn = False
+            syringe1.used_this_turn = False
+            syringe2.used_this_turn = False
+            scarecrow1.used_this_turn = False
+            scarecrow2.used_this_turn = False
+
+            game_over, winner_index = check_game_over(player_lives)
+            if game_over:
+                game_state = GameState.GAME_OVER
+
             return True
     return False
 
-def handle_cigarette_click(mouse_pos, cigarette, player_lives, player_index):
-    """담배 아이템 클릭 처리"""
-    if cigarette.active and cigarette.rect.collidepoint(mouse_pos):
-        cigarette.smoke(player_lives, player_index)
+def handle_syringe_click(mouse_pos, syringe, player_lives, player_index):
+    """주사기 클릭 처리"""
+    global item_used_this_turn
+    if syringe.active and syringe.rect.collidepoint(mouse_pos) and not syringe.used_this_turn and not item_used_this_turn:
+        if random.random() < 0.7:  # 70% 확률로 발동
+            syringe.heal(player_lives, player_index)
+            print("Syringe effect activated!")
+        else:
+            print("Syringe effect did not activate!")
+            syringe.active = False  # 발동 실패 시 카드 비활성화
+        syringe.used_this_turn = True
+        item_used_this_turn = True
         return True
-    return False
 
 def handle_shoot_action(
     weapon,
@@ -614,6 +635,7 @@ def handle_shoot_action(
     target_self,
 ):
     """발사 액션 처리 및 총알 타입 반환"""
+    global item_used_this_turn
     bullet_type = weapon.shoot()
 
     if bullet_type is not None:
@@ -622,7 +644,14 @@ def handle_shoot_action(
         if bullet_type == 1:
             apply_damage(target_player, damage, scarecrow_protected, player_lives)
 
-        # 총알 발사 후 턴 변경
+        # 총알 발사 후 턴 변경 (수정)
+        if not (
+            bullet_type == 0 and target_self
+        ):  # "Shoot Self"를 클릭했고, 데미지를 입지 않은 경우 (공포탄) 가 아닐 때만 턴을 넘김
+            current_player = (current_player + 1) % 2
+        # 턴 변경 시에, item_used_this_turn을 False로 설정
+        item_used_this_turn = False
+
         return True, bullet_type
     return False, None
 
@@ -634,7 +663,7 @@ def handle_shoot_buttons_click(
     current_player,
     player_lives,
     bullet_enhanced,
-    scarecrow_protected,
+    scarecrow_protected
 ):
     """발사 버튼 클릭 처리"""
     if shoot_self_button_rect.collidepoint(mouse_pos):
@@ -644,7 +673,7 @@ def handle_shoot_buttons_click(
             player_lives,
             bullet_enhanced,
             scarecrow_protected,
-            target_self=True,
+            target_self=True
         )
     elif shoot_opponent_button_rect.collidepoint(mouse_pos):
         return handle_shoot_action(
@@ -653,8 +682,9 @@ def handle_shoot_buttons_click(
             player_lives,
             bullet_enhanced,
             scarecrow_protected,
-            target_self=False,
+            target_self=False
         )
+
     return False, None
 
 def calculate_damage(bullet_enhanced, current_player):
@@ -671,64 +701,34 @@ def apply_damage(target_player, damage, scarecrow_protected, player_lives):
         player_lives[target_player] = max(0, player_lives[target_player] - damage)
     else:
         print(f"Player {target_player + 1} is protected by Scarecrow!")
-        scarecrow_protected[target_player] = False
+        scarecrow_protected[target_player] = False # 수정: 피해를 한 번 무효화한 후에는 Scarecrow 효과가 사라지도록 설정
 
-def handle_reload(weapon, cigarette1, cigarette2, scarecrow1, scarecrow2, bullets, grenades):
+def handle_reload(weapon, syringe1, syringe2, scarecrow1, scarecrow2, bullets, grenades):
     """재장전 및 아이템 재활성화 처리"""
-    weapon.reload()
-    cigarette1.reactivate()
-    cigarette2.reactivate()
-    scarecrow1.reactivate(new_position=scarecrow1.position)
-    scarecrow2.reactivate(new_position=scarecrow2.position)
-    for bullet in bullets:
-        bullet.reactivate()
-    for grenade in grenades:
-        grenade.reactivate()
+    global item_used_this_turn
+    if not weapon.magazine:
+        weapon.reload()
 
-def handle_item_placement(mouse_pos, item_slots, current_item, current_player):
-    """아이템 배치 처리"""
-    global placed_item
-    for slot in item_slots:
-        if slot.is_clicked(mouse_pos) and current_item:
-            if placed_item[current_player] is not None:
-                # 이미 놓인 아이템이 있으면 해당 아이템 비활성화
-                placed_item[current_player].active = True
+        # Scarecrow 카드 처리 (수정)
+        if not scarecrow_protected[0]: # scarecrow1 (Player 1)이 보호 중이 아닐 때만 reactivate
+            scarecrow1.reactivate(new_position=scarecrow1_position)
+        if not scarecrow_protected[1]: # scarecrow2 (Player 2)가 보호 중이 아닐 때만 reactivate
+            scarecrow2.reactivate(new_position=scarecrow2_position)
 
-            slot.place_item(current_item)
-            current_item.active = False  # 아이템 비활성화
-            placed_item[current_player] = current_item  # 놓인 아이템 기록
-            return True
-    return False
-
-def handle_roulette_spin(item_slots, roulette, current_player):
-    """룰렛 회전 처리"""
-    if placed_item[current_player] is not None:
-        roulette.spin()
-        return True
-    return False
-
-def activate_item(item_slot, roulette, player_lives, current_player, bullet_enhanced, scarecrow_protected):
-    """룰렛 결과에 따른 아이템 발동 처리"""
-    global placed_item
-    if item_slot.item:
-        result_color = roulette.get_result()
-        if result_color == item_slot.color:
-            print(f"Activating item: {type(item_slot.item).__name__}")
-            if isinstance(item_slot.item, Cigarette):
-                item_slot.item.smoke(player_lives, current_player)
-            elif isinstance(item_slot.item, Bullet):
-                item_slot.item.enhance()
-                bullet_enhanced[current_player] = True
-            elif isinstance(item_slot.item, Scarecrow):
-                item_slot.item.apply_effect()
-                scarecrow_protected[1 - current_player] = True
-            elif isinstance(item_slot.item, Grenade):
-                item_slot.item.use(player_lives)
-        else:
-            print(f"Item {type(item_slot.item).__name__} removed.")
-
-        item_slot.remove_item()
-        placed_item[current_player] = None
+        # 나머지 아이템들은 이전과 동일하게 처리
+        for bullet in bullets:
+            bullet.reactivate()
+            bullet.used_this_turn = False
+        for grenade in grenades:
+            grenade.reactivate()
+            grenade.used_this_turn = False
+        syringe1.reactivate()
+        syringe2.reactivate()
+        syringe1.used_this_turn = False
+        syringe2.used_this_turn = False
+        scarecrow1.used_this_turn = False
+        scarecrow2.used_this_turn = False
+        item_used_this_turn = False
 
 # --- 초기화 ---
 
@@ -746,13 +746,13 @@ except pygame.error as e:
     print(f"Failed to load background image: {e}")
     background = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
 
-# 폰트 로드
-font = pygame.font.SysFont(FONT_NAME, FONT_SIZE)
+# 메뉴 폰트 로드 (굵은 폰트 적용)
+menu_font = pygame.font.Font(FONT_NAME, MENU_FONT_SIZE)
+if BOLD_FONT:
+    menu_font.set_bold(True)
 
-# 메뉴 버튼 텍스트 렌더링
-play_text = font.render("Play", True, WHITE)
-rules_text = font.render("Rules", True, WHITE)
-quit_text = font.render("Quit", True, WHITE)
+# 일반 폰트 로드
+font = pygame.font.SysFont(FONT_NAME, FONT_SIZE)
 
 # 클래스 인스턴스 생성
 game = Game()
@@ -761,40 +761,71 @@ player_lives = [INITIAL_LIVES, INITIAL_LIVES]
 weapon = Weapon(player_lives)
 card = Card()
 
-# 담배 위치 설정
-cigarette1_position = (80, 200)
-cigarette2_position = (920, 200)
-cigarette1 = Cigarette(cigarette1_position)
-cigarette2 = Cigarette(cigarette2_position)
+# 아이템 카드 크기
+ITEM_WIDTH = 165
+ITEM_HEIGHT = 214
 
-# 허수아비 위치 설정
-scarecrow1_position = (80, 400)
-scarecrow2_position = (920, 400)
-scarecrow1 = Scarecrow(scarecrow1_position)
-scarecrow2 = Scarecrow(scarecrow2_position)
+# 아이템 카드 위치 좌표
+# Player 1
+SCARECROW1_POS = (55, 125)  # Player1 - 오른쪽 위
+BULLET1_POS = (225, 125)  # Player1 - 왼쪽 위
+SYRINGE1_POS = (225, 350)  # Player1 - 왼쪽 아래
+GRENADE1_POS = (55, 350)  # Player1 - 오른쪽 아래
 
-# 총알 위치 설정
-bullet_size = (cigarette1.image.get_width(), cigarette1.image.get_height())
+# Player 2
+SCARECROW2_POS = (1040, 125)  # Player2 - 왼쪽 위
+BULLET2_POS = (870, 125) # Player2 - 오른쪽 위
+SYRINGE2_POS = (870, 350)  # Player2 - 오른쪽 아래
+GRENADE2_POS = (1040, 350)  # Player2 - 왼쪽 아래
+
+# 버튼 위치 및 크기 설정: 중앙 하단에 배치
+BUTTON_WIDTH = WINDOW_WIDTH * 0.15
+BUTTON_HEIGHT = WINDOW_HEIGHT * 0.08
+BUTTON_MARGIN = WINDOW_WIDTH * 0.015  # 버튼 간 간격
+shoot_self_button_rect = pygame.Rect(
+    WINDOW_WIDTH // 2 - BUTTON_WIDTH - BUTTON_MARGIN // 2,
+    WINDOW_HEIGHT - BUTTON_HEIGHT - 110,
+    BUTTON_WIDTH,
+    BUTTON_HEIGHT,
+)
+shoot_opponent_button_rect = pygame.Rect(
+    WINDOW_WIDTH // 2 + BUTTON_MARGIN // 2,
+    WINDOW_HEIGHT - BUTTON_HEIGHT - 110,
+    BUTTON_WIDTH,
+    BUTTON_HEIGHT,
+)
+
+# 1. Scarecrow 위치 설정
+scarecrow_size = (ITEM_WIDTH, ITEM_HEIGHT)
+scarecrow1_position = SCARECROW1_POS
+scarecrow2_position = SCARECROW2_POS
+scarecrow1 = Scarecrow(scarecrow1_position, size=scarecrow_size)
+scarecrow2 = Scarecrow(scarecrow2_position, size=scarecrow_size)
+
+# 2. Bullet 위치 설정
+bullet_size = (ITEM_WIDTH, ITEM_HEIGHT)
 bullet_positions = [
-    (cigarette1_position[0], cigarette1_position[1] + 100),
-    (cigarette2_position[0], cigarette2_position[1] + 100),
+    BULLET1_POS,
+    BULLET2_POS
 ]
 bullets = [Bullet(pos, size=bullet_size) for pos in bullet_positions]
 
-# 수류탄 위치 설정
-grenade_offset_y = 80 + 10
-grenade1_position = (scarecrow1_position[0], scarecrow1_position[1] + grenade_offset_y)
-grenade2_position = (scarecrow2_position[0], scarecrow2_position[1] + grenade_offset_y)
+# 3. Syringe 위치 설정
+syringe_size = (ITEM_WIDTH, ITEM_HEIGHT)
+syringe1_position = SYRINGE1_POS
+syringe2_position = SYRINGE2_POS
+syringe1 = Syringe(syringe1_position)
+syringe2 = Syringe(syringe2_position)
+
+# 4. Grenade 위치 설정
+grenade_size = (ITEM_WIDTH, ITEM_HEIGHT)
+grenade1_position = GRENADE1_POS
+grenade2_position = GRENADE2_POS
 grenades = [
-    Grenade(pos, size=(50, 50)) for pos in [grenade1_position, grenade2_position]
+    Grenade(pos, size=grenade_size) for pos in [grenade1_position, grenade2_position]
 ]
 
-# 버튼 위치 및 크기 설정
-shoot_self_button_rect = pygame.Rect(420, 600, 120, 40)
-shoot_opponent_button_rect = pygame.Rect(540, 600, 120, 40)
-return_button_rect = menu.return_image.get_rect(topleft=(20, 620))
-
-# 버튼 텍스트
+# 버튼 텍스트 (크기 조정)
 shoot_self_text = font.render("Shoot Self", True, WHITE)
 shoot_opponent_text = font.render("Shoot Opponent", True, WHITE)
 
@@ -805,7 +836,7 @@ in_menu = True
 game_state = GameState.PLAYING
 bullet_enhanced = [False, False]
 scarecrow_protected = [False, False]
-placed_item = [None, None]  # 각 플레이어가 놓은 아이템
+item_used_this_turn = False
 
 # --- 메인 루프 ---
 
@@ -814,63 +845,52 @@ while run:
     window.blit(background, (0, 0))
 
     if in_menu:
-        # 메뉴 화면 처리
-        if menu.is_hovered(490, 475, play_text.get_width(), play_text.get_height()):
-            play_text = font.render("Play", True, RED)
-        else:
-            play_text = font.render("Play", True, WHITE)
-        if menu.is_hovered(490, 510, rules_text.get_width(), rules_text.get_height()):
-            rules_text = font.render("Rules", True, RED)
-        else:
-            rules_text = font.render("Rules", True, WHITE)
-        if menu.is_hovered(490, 545, quit_text.get_width(), quit_text.get_height()):
-            quit_text = font.render("Quit", True, RED)
-        else:
-            quit_text = font.render("Quit", True, WHITE)
+        # 메뉴 텍스트 위치 계산 (수정)
+        # PLAY_TEXT_X = 0  # 이제 안쓰이는 변수
+        PLAY_TEXT_Y = WINDOW_HEIGHT // 2 + 70  # 수정: 130을 더 뺌
+        # QUIT_TEXT_X = 0  # 이제 안쓰이는 변수
+        QUIT_TEXT_Y = PLAY_TEXT_Y + menu_font.get_height() + 20
+
+        # 메뉴 버튼 텍스트 렌더링 (굵은 폰트 사용)
+        play_text = menu_font.render("Play", True, WHITE)
+        quit_text = menu_font.render("Quit", True, WHITE)
+
+        # rect 객체를 이벤트 루프 바깥에서 생성하도록 수정 (수정)
+        play_text_rect = play_text.get_rect()
+        # play_text_rect.centerx = WINDOW_WIDTH // 2  # centerx 설정 제거
+        play_text_rect.x = WINDOW_WIDTH // 15 - play_text_rect.width // 4  # x좌표 설정
+        play_text_rect.y = PLAY_TEXT_Y
+        quit_text_rect = quit_text.get_rect()
+        # quit_text_rect.centerx = WINDOW_WIDTH // 2  # centerx 설정 제거
+        quit_text_rect.x = WINDOW_WIDTH // 15 - quit_text_rect.width // 4  # x좌표 설정
+        quit_text_rect.y = QUIT_TEXT_Y
 
         if menu.menu_state == MenuState.MAIN:
-            menu.show_main_menu(window, play_text, rules_text, quit_text)
-        elif menu.menu_state == MenuState.RULES:
-            menu.show_rules(window)
+            menu.show_main_menu(window, play_text_rect, quit_text_rect)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if menu.menu_state == MenuState.MAIN:
-                    if pygame.Rect(
-                        490, 475, play_text.get_width(), play_text.get_height()
-                    ).collidepoint(pygame.mouse.get_pos()):
+                    if play_text_rect.collidepoint(pygame.mouse.get_pos()):
                         in_menu = False
                         game.game_state = GameState.PLAYING
                         weapon.reload()
-                        cigarette1.active = True
-                        cigarette2.active = True
                         scarecrow1.reactivate(new_position=scarecrow1_position)
                         scarecrow2.reactivate(new_position=scarecrow2_position)
                         for bullet in bullets:
                             bullet.reactivate()
                         for grenade in grenades:
                             grenade.reactivate()
-                    elif pygame.Rect(
-                        490, 510, rules_text.get_width(), rules_text.get_height()
-                    ).collidepoint(pygame.mouse.get_pos()):
-                        menu.menu_state = MenuState.RULES
-                    elif pygame.Rect(
-                        490, 545, quit_text.get_width(), quit_text.get_height()
-                    ).collidepoint(pygame.mouse.get_pos()):
+                        syringe1.active = True
+                        syringe2.active = True
+                    elif quit_text_rect.collidepoint(pygame.mouse.get_pos()):
                         run = False
-                elif menu.menu_state == MenuState.RULES:
-                    if pygame.Rect(
-                        0, 0, menu.return_image.get_width(), menu.return_image.get_height()
-                    ).collidepoint(pygame.mouse.get_pos()):
-                        menu.menu_state = MenuState.MAIN
 
     elif game.game_state == GameState.PLAYING:
         # 게임 화면
-        game.display_black_background(window)
         card.draw_table(window)
-        card.draw_card_slots(window, 120, 70)
         weapon.display_shotgun(window)
         weapon.display_magazine(window)
         display_lives(window, player_lives)
@@ -881,13 +901,13 @@ while run:
             shoot_opponent_button_rect,
             shoot_self_text,
             shoot_opponent_text,
+            weapon
         )
 
-        window.blit(menu.return_image, return_button_rect.topleft)
-        cigarette1.display_cigarette(window)
-        cigarette2.display_cigarette(window)
         scarecrow1.draw(window)
         scarecrow2.draw(window)
+        syringe1.display_syringe(window)
+        syringe2.display_syringe(window)
 
         for bullet in bullets:
             bullet.draw(window)
@@ -895,92 +915,90 @@ while run:
         for grenade in grenades:
             grenade.draw(window)
 
-        # 룰렛 및 아이템 슬롯 그리기
-        game.roulette.draw(window)
-        for slot in game.item_slots:
-            slot.draw(window)
-
-        # 룰렛 회전 애니메이션 업데이트
-        game.roulette.update()
-
-        # 현재 턴인 플레이어에 따라 사용 가능한 아이템 설정
-        available_items = []
-        if current_player == 0:
-            available_items = [cigarette1, scarecrow1] + [b for b in bullets if b.rect.x < WINDOW_WIDTH // 2] + [g for g in grenades if g.rect.x < WINDOW_WIDTH // 2]
-        else:
-            available_items = [cigarette2, scarecrow2] + [b for b in bullets if b.rect.x > WINDOW_WIDTH // 2] + [g for g in grenades if g.rect.x > WINDOW_WIDTH // 2]
+        # Bullet 및 Scarecrow 효과 상태 표시
+        display_status_effects(window, bullet_enhanced, scarecrow_protected)
 
         for event in pygame.event.get():
+            # 허수아비, 돌아가기 버튼 관련 변수는 이벤트 루프 밖에서 한 번만 정의
             if event.type == pygame.QUIT:
                 run = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN:  # 수정: MOUSEBUTTONDOWN 이벤트를 elif에서 if로 변경
                 mouse_pos = pygame.mouse.get_pos()
 
-                # 아이템 클릭 확인 및 슬롯에 배치
-                for item in available_items:
-                    if item.active and item.rect.collidepoint(mouse_pos):
-                        current_item = item
-                        item_placed = handle_item_placement(
-                            mouse_pos, game.item_slots, current_item, current_player
-                        )
-                        break
+                # 아이템 클릭 여부 확인 (클릭 여부만 확인)
+                bullet_clicked = handle_bullet_click(
+                    mouse_pos, bullets, bullet_enhanced, current_player
+                )
 
-                if return_button_rect.collidepoint(mouse_pos):
-                    in_menu = True
-                    game.game_state = GameState.PLAYING
-
-                shoot_clicked, bullet_type = handle_shoot_buttons_click(
+                scarecrow_clicked = handle_scarecrow_click(
                     mouse_pos,
-                    shoot_self_button_rect,
-                    shoot_opponent_button_rect,
-                    weapon,
+                    scarecrow1,
+                    scarecrow2,
                     current_player,
-                    player_lives,
-                    bullet_enhanced,
                     scarecrow_protected,
                 )
 
-                if shoot_clicked:
-                    # 총알 발사 후 즉시 화면 업데이트
-                    pygame.display.update()
-                    game_over, loser = check_game_over(player_lives)
-                    if game_over:
-                        game.game_state = GameState.GAME_OVER
-                        winner_index = 1 - loser
+                grenade_clicked = handle_grenade_click(
+                    mouse_pos, grenades, player_lives
+                )
 
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    if not game.roulette.spinning:
-                        # 룰렛 회전 및 아이템 사용
-                        spin_clicked = handle_roulette_spin(
-                            game.item_slots, game.roulette, current_player
-                        )
-                        if spin_clicked:
-                            # 룰렛 회전 후 결과 확인 및 아이템 발동
-                            pygame.display.update()  # 룰렛 회전 애니메이션을 위해 업데이트
-                            pygame.time.delay(1000)  # 룰렛 회전 시간 지연
-                            game.roulette.update()
-                            for slot in game.item_slots:
-                                activate_item(
-                                    slot,
-                                    game.roulette,
-                                    player_lives,
-                                    current_player,
-                                    bullet_enhanced,
-                                    scarecrow_protected,
-                                )
-                            # 턴 변경
-                            current_player = (current_player + 1) % 2
-                elif event.key == pygame.K_r:
-                    handle_reload(
+                syringe_clicked = False
+                if current_player == 0:
+                    syringe_clicked = handle_syringe_click(mouse_pos, syringe1, player_lives, 0)
+                elif current_player == 1:
+                    syringe_clicked = handle_syringe_click(mouse_pos, syringe2, player_lives, 1)
+
+                if not (bullet_clicked or scarecrow_clicked or grenade_clicked or syringe_clicked):
+                    # 발사 버튼 클릭 및 총알 발사 여부 확인
+                    shoot_clicked, bullet_type = handle_shoot_buttons_click(
+                        mouse_pos,
+                        shoot_self_button_rect,
+                        shoot_opponent_button_rect,
                         weapon,
-                        cigarette1,
-                        cigarette2,
-                        scarecrow1,
-                        scarecrow2,
-                        bullets,
-                        grenades,
+                        current_player,
+                        player_lives,
+                        bullet_enhanced,
+                        scarecrow_protected,
                     )
+
+                    if shoot_clicked:  # 발사 버튼이 클릭된 경우
+                        # 총알 발사 후 즉시 화면 업데이트 (수정: 이부분 삭제)
+                        # "Shoot Self"를 클릭했고, 데미지를 입지 않은 경우 (공포탄)
+                        if bullet_type == 0 and (mouse_pos[0] >= shoot_self_button_rect.left and mouse_pos[
+                            0] <= shoot_self_button_rect.right and mouse_pos[1] >= shoot_self_button_rect.top and
+                                                 mouse_pos[1] <= shoot_self_button_rect.bottom):
+                            pass
+                        else:
+                            current_player = (current_player + 1) % 2
+                            # 플레이어 턴이 끝나는 시점에 item_used_this_turn을 False로 설정 (제거)
+                            for bullet in bullets:
+                                bullet.used_this_turn = False
+                            for grenade in grenades:
+                                grenade.used_this_turn = False
+                            syringe1.used_this_turn = False
+                            syringe2.used_this_turn = False
+                            scarecrow1.used_this_turn = False
+                            scarecrow2.used_this_turn = False
+            # 수정 : KEYDOWN 이벤트를 MOUSEBUTTONDOWN와 독립적으로 처리
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    if game.game_state == GameState.PLAYING:  # 이부분이 중첩 if문 안으로 이동
+                        handle_reload(
+                            weapon,
+                            syringe1,
+                            syringe2,
+                            scarecrow1,
+                            scarecrow2,
+                            bullets,
+                            grenades
+                        )
+
+        # 게임 종료 여부 확인 (이벤트 루프 밖으로 이동, 위치 수정)
+        game_over, winner_index = check_game_over(player_lives)
+        if game_over:
+            game.game_state = GameState.GAME_OVER
+
+        pygame.display.update()  # 이부분을 앞으로 이동
 
     elif game.game_state == GameState.GAME_OVER:
         # 게임 종료 상태
